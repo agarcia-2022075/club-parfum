@@ -4,7 +4,7 @@ import { useState } from "react";
 import Image from "next/image";
 import { Product } from "@/types/store";
 import { formatPrice } from "@/lib/utils";
-import { ShoppingBag, Sparkles } from "lucide-react";
+import { ShoppingBag, Check } from "lucide-react";
 
 interface ProductCardProps {
   product: Product;
@@ -14,13 +14,19 @@ export function ProductCard({ product }: ProductCardProps) {
   const [selectedVariant, setSelectedVariant] = useState(
     product.variants && product.variants.length > 0 ? product.variants[0] : null
   );
+  const [isAdded, setIsAdded] = useState(false);
 
   const currentPrice = selectedVariant ? selectedVariant.price : product.base_price;
 
+  const handleAddToCart = () => {
+    setIsAdded(true);
+    setTimeout(() => setIsAdded(false), 1800);
+  };
+
   return (
-    <div className="group flex flex-col bg-white rounded-2xl overflow-hidden border border-[#E8DFD8] transition-all duration-300 hover:shadow-lg hover:border-[#9C6D49]/40">
-      {/* Imagen */}
-      <div className="relative aspect-square overflow-hidden bg-[#F2EBE3]">
+    <article className="group flex flex-col bg-white rounded-xl overflow-hidden border border-[#E7E2DA] transition-all duration-300 hover:shadow-xl hover:border-[#A16207]/40 relative">
+      {/* Photographie du produit */}
+      <div className="relative aspect-square overflow-hidden bg-[#F2EFE9]">
         <Image
           src={product.images[0]}
           alt={product.name}
@@ -29,82 +35,103 @@ export function ProductCard({ product }: ProductCardProps) {
           className="object-cover object-center group-hover:scale-105 transition-transform duration-700 ease-out"
           unoptimized
         />
+        {/* Catégorie discrète sur papier crème */}
         <div className="absolute top-3 left-3">
-          <span className="px-2.5 py-1 text-[11px] font-medium tracking-wide uppercase bg-[#FAF8F5]/90 backdrop-blur-sm text-[#2A2421] rounded-full shadow-xs border border-[#E8DFD8]">
+          <span className="px-3 py-1 text-[10px] font-semibold tracking-[0.2em] uppercase bg-[#FAFAF8]/95 backdrop-blur-sm text-[#1C1917] rounded-sm shadow-xs border border-[#E7E2DA]">
             {product.category_name}
           </span>
         </div>
       </div>
 
-      {/* Contenido */}
-      <div className="p-5 flex flex-col flex-1 justify-between">
+      {/* Détails du produit */}
+      <div className="p-6 flex flex-col flex-1 justify-between bg-white">
         <div>
-          {/* Notas olfativas */}
-          <div className="flex flex-wrap gap-1.5 mb-2.5">
+          {/* Notes olfactives (Pyramide olfactive visible) */}
+          <div className="flex flex-wrap gap-1.5 mb-3" aria-label="Notes olfactives">
             {product.scent_notes.map((note, idx) => (
               <span
                 key={idx}
-                className="text-[11px] text-[#70655E] bg-[#F2EBE3] px-2 py-0.5 rounded-md font-normal"
+                className="text-[11px] text-[#57534E] bg-[#FAFAF8] border border-[#E7E2DA] px-2.5 py-0.5 rounded-sm font-normal tracking-wide"
               >
                 {note}
               </span>
             ))}
           </div>
 
-          {/* Título */}
-          <h3 className="font-serif text-lg font-normal text-[#2A2421] leading-snug group-hover:text-[#9C6D49] transition-colors">
+          {/* Nom du produit en Cormorant Garamond */}
+          <h3 className="font-serif text-2xl font-normal text-[#1C1917] leading-tight group-hover:text-[#A16207] transition-colors">
             {product.name}
           </h3>
 
-          {/* Descripción corta */}
-          <p className="mt-2 text-xs text-[#70655E] line-clamp-2 leading-relaxed">
+          {/* Description olfactive */}
+          <p className="mt-2.5 text-xs text-[#57534E] line-clamp-2 leading-relaxed font-light">
             {product.description}
           </p>
         </div>
 
-        {/* Variantes y Precio */}
-        <div className="mt-6 pt-4 border-t border-[#F2EBE3]">
+        {/* Sélecteur de formats et Prix */}
+        <div className="mt-6 pt-4 border-t border-[#F2EFE9]">
           {product.variants && product.variants.length > 1 && (
-            <div className="mb-3">
-              <label className="text-[10px] uppercase tracking-wider text-[#70655E] font-medium block mb-1">
-                Format
-              </label>
-              <div className="flex gap-2">
-                {product.variants.map((v) => (
-                  <button
-                    key={v.id}
-                    onClick={() => setSelectedVariant(v)}
-                    className={`text-xs px-2.5 py-1 rounded-lg border transition ${
-                      selectedVariant?.id === v.id
-                        ? "border-[#9C6D49] bg-[#9C6D49]/10 text-[#9C6D49] font-medium"
-                        : "border-[#E8DFD8] text-[#70655E] hover:border-[#9C6D49]/50"
-                    }`}
-                  >
-                    {v.size_label}
-                  </button>
-                ))}
+            <fieldset className="mb-4">
+              <legend className="text-[10px] uppercase tracking-[0.2em] text-[#57534E] font-medium block mb-2">
+                Sélectionner le format
+              </legend>
+              <div className="flex flex-wrap gap-2">
+                {product.variants.map((v) => {
+                  const isSelected = selectedVariant?.id === v.id;
+                  return (
+                    <button
+                      key={v.id}
+                      type="button"
+                      onClick={() => setSelectedVariant(v)}
+                      className={`text-xs px-3 py-1.5 rounded-sm border transition-all duration-200 cursor-pointer min-h-[34px] ${
+                        isSelected
+                          ? "border-[#A16207] bg-[#A16207]/10 text-[#A16207] font-semibold"
+                          : "border-[#E7E2DA] text-[#57534E] hover:border-[#1C1917] hover:text-[#1C1917]"
+                      }`}
+                      aria-pressed={isSelected}
+                    >
+                      {v.size_label}
+                    </button>
+                  );
+                })}
               </div>
-            </div>
+            </fieldset>
           )}
 
           <div className="flex items-center justify-between mt-2">
             <div>
-              <span className="text-xs text-[#70655E] block">Prix</span>
-              <span className="font-serif text-lg font-semibold text-[#2A2421]">
+              <span className="text-[10px] uppercase tracking-wider text-[#57534E] block">Prix TTC</span>
+              <span className="font-serif text-2xl font-medium text-[#1C1917]">
                 {formatPrice(currentPrice)}
               </span>
             </div>
 
             <button
-              className="flex items-center gap-1.5 px-4 py-2 bg-[#2A2421] hover:bg-[#9C6D49] text-white text-xs font-medium rounded-xl transition duration-200"
-              onClick={() => alert(`Produit ajouté : ${product.name} (${selectedVariant?.size_label || "Standard"})`)}
+              type="button"
+              onClick={handleAddToCart}
+              className={`min-h-[44px] px-5 py-2.5 rounded-md text-xs font-semibold tracking-wider uppercase transition-all duration-200 cursor-pointer flex items-center gap-2 focus-visible:ring-2 focus-visible:ring-[#A16207] ${
+                isAdded 
+                  ? "bg-emerald-800 text-white" 
+                  : "bg-[#1C1917] hover:bg-[#A16207] text-white active:scale-95 shadow-sm"
+              }`}
+              aria-label={`Ajouter ${product.name} au panier`}
             >
-              <ShoppingBag className="w-3.5 h-3.5" />
-              <span>Ajouter</span>
+              {isAdded ? (
+                <>
+                  <Check className="w-4 h-4" aria-hidden="true" />
+                  <span>Ajouté</span>
+                </>
+              ) : (
+                <>
+                  <ShoppingBag className="w-4 h-4" aria-hidden="true" />
+                  <span>Ajouter</span>
+                </>
+              )}
             </button>
           </div>
         </div>
       </div>
-    </div>
+    </article>
   );
 }
