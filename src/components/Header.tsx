@@ -16,37 +16,36 @@ export function Header() {
             </span>
           </Link>
 
-          {/* Navigation centrale épurée (Taste-skill: pas de kickers superflus) */}
+          {/* Navigation centrale avec liens vers les endpoints dédiés */}
           <nav className="hidden md:flex items-center space-x-10 text-xs text-[#57534E] tracking-[0.18em] uppercase font-medium">
             <Link 
-              href="#collections" 
+              href="/boutique" 
               className="hover:text-[#1C1917] transition-colors py-2 relative after:content-[''] after:absolute after:bottom-0 after:left-0 after:w-0 after:h-[1.5px] after:bg-[#A16207] hover:after:w-full after:transition-all after:duration-300"
             >
-              Collections
+              La Boutique
             </Link>
             <Link 
-              href="#savoir-faire" 
+              href="/#savoir-faire" 
               className="hover:text-[#1C1917] transition-colors py-2 relative after:content-[''] after:absolute after:bottom-0 after:left-0 after:w-0 after:h-[1.5px] after:bg-[#A16207] hover:after:w-full after:transition-all after:duration-300"
             >
               Le Savoir-Faire
             </Link>
             <Link 
-              href="#livraison" 
+              href="/livraison" 
               className="hover:text-[#1C1917] transition-colors py-2 relative after:content-[''] after:absolute after:bottom-0 after:left-0 after:w-0 after:h-[1.5px] after:bg-[#A16207] hover:after:w-full after:transition-all after:duration-300"
             >
               Livraison
             </Link>
             <Link 
-              href="#faq" 
-              className="hover:text-[#1C1917] transition-colors py-2 relative after:content-[''] after:absolute after:bottom-0 after:left-0 after:w-0 after:h-[1.5px] after:bg-[#A16207] hover:after:w-full after:transition-all after:duration-300"
+              href="/admin" 
+              className="text-[#A16207] hover:text-[#1C1917] transition-colors py-2 font-semibold"
             >
-              Conseils & FAQ
+              Espace Gestion
             </Link>
           </nav>
 
-          {/* Actions interactives (Impeccable: 44px min touch target, transitions douces) */}
+          {/* Actions interactives */}
           <div className="flex items-center space-x-3">
-            {/* Conseil olfactif WhatsApp */}
             <a
               href="https://wa.me/?text=Bonjour%20Club%20Parfum,%20j'aimerais%20un%20conseil%20personnalis%C3%A9%20sur%20vos%20senteurs"
               target="_blank"
@@ -55,10 +54,9 @@ export function Header() {
               title="Conseil personnalisé par WhatsApp"
             >
               <MessageCircle className="w-3.5 h-3.5 text-[#A16207]" aria-hidden="true" />
-              <span className="hidden sm:inline tracking-wider uppercase text-[11px]">Conseil Olfactif</span>
+              <span className="hidden sm:inline tracking-wider uppercase text-[11px]">Conseil WhatsApp</span>
             </a>
 
-            {/* Bouton Panier */}
             <button
               className="relative p-2.5 rounded-full text-[#1C1917] hover:bg-[#F2EFE9] transition-colors cursor-pointer min-w-[44px] min-h-[44px] flex items-center justify-center focus-visible:ring-2 focus-visible:ring-[#A16207]"
               aria-label="Voir mon panier (0 article)"
