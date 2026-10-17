@@ -25,10 +25,10 @@ export function Header() {
               La Boutique
             </Link>
             <Link 
-              href="/#savoir-faire" 
+              href="/notre-histoire" 
               className="hover:text-[#1C1917] transition-colors py-2 relative after:content-[''] after:absolute after:bottom-0 after:left-0 after:w-0 after:h-[1.5px] after:bg-[#A16207] hover:after:w-full after:transition-all after:duration-300"
             >
-              Le Savoir-Faire
+              Notre Histoire
             </Link>
             <Link 
               href="/livraison" 
