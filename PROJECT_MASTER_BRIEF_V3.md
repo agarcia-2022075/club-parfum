@@ -66,10 +66,17 @@ A diferencia de una "one-page" saturada, la tienda sigue el patrón de e-commerc
    - Botón directo de consulta por WhatsApp sobre esa fragancia específica.
    - Insignias de garantía de entrega y pureza artesanal.
 4. **`/livraison` (Página de Envíos & Retornos):**
-   - Comparador de las 3 opciones de entrega en Francia.
+   - Comparador de las 3 opciones de entrega en Francia (Point Relais, Colissimo, Express).
    - Guía de cómo seleccionar el casillero o comercio en Mondial Relay.
-   - Política de devoluciones y normativa europea de higiene.
-5. **`/admin` (Panel de Administración Móvil PWA):**
+5. **`/mentions-legales` (Mentions Légales Obligatoires LCEN):**
+   - Identificación del Entrepreneur Individuel (EI), SIRET, hébergeur Vercel y exención fiscal art. 293 B du CGI.
+6. **`/cgv` (Conditions Générales de Vente B2C):**
+   - Régimen contractual 2026 con designación obligatoria del médiateur de la consommation (CM2C) y garantías legales de 2 años.
+7. **`/politique-retractation` (Droit de Rétractation 14j & Formulaire):**
+   - Excepción de higiene del art. L.221-28 5° del Code de la consommation para perfumes/cosméticos desprecintados y formulario interactivo de devolución.
+8. **`/politique-confidentialite` (Protection des Données RGPD & CNIL):**
+   - Transparencia en datos de entrega, sin cookies intrusivas y derechos de acceso y rectificación.
+9. **`/admin` (Panel de Administración Móvil PWA):**
    - Diseñado Mobile-First para la dueña (instalable en la pantalla de inicio del smartphone).
    - Pestaña **Commandes**: Listado de pedidos en tiempo real con estado (*À préparer*, *Expédiée*, *Livrée*), datos del cliente y botón rápido para marcar como enviada.
    - Pestaña **Produits**: Lista de artículos con botón de stock rápido (*En vente / Épuisé*) y modal de creación de producto con carga directa desde la cámara del móvil.
