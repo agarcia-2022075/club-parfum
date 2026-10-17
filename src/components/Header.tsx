@@ -3,9 +3,11 @@
 import { useState } from "react";
 import Link from "next/link";
 import { ShoppingBag, MessageCircle, Menu, X, Sparkles } from "lucide-react";
+import { useCart } from "@/context/CartContext";
 
 export function Header() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const { totalCount, openCart } = useCart();
 
   return (
     <header className="sticky top-0 z-50 bg-[#FAFAF8]/95 backdrop-blur-md border-b border-[#E7E2DA] transition-all">
@@ -67,15 +69,19 @@ export function Header() {
               <span className="hidden sm:inline tracking-wider uppercase text-[11px]">Conseil WhatsApp</span>
             </a>
 
-            {/* Panier */}
+            {/* Panier interactif connecté au CartContext */}
             <button
+              type="button"
+              onClick={openCart}
               className="relative p-2.5 rounded-full text-[#1C1917] hover:bg-[#F2EFE9] transition-colors cursor-pointer min-w-[44px] min-h-[44px] flex items-center justify-center"
-              aria-label="Voir mon panier (0 article)"
+              aria-label={`Voir mon panier (${totalCount} articles)`}
             >
               <ShoppingBag className="w-5 h-5 stroke-[1.5]" aria-hidden="true" />
-              <span className="absolute top-1.5 right-1.5 w-4 h-4 bg-[#A16207] text-white text-[10px] font-bold rounded-full flex items-center justify-center shadow-xs">
-                0
-              </span>
+              {totalCount > 0 && (
+                <span className="absolute top-1.5 right-1.5 w-4 h-4 bg-[#A16207] text-white text-[10px] font-bold rounded-full flex items-center justify-center shadow-xs animate-in zoom-in-50 duration-200">
+                  {totalCount}
+                </span>
+              )}
             </button>
 
             {/* Bouton Hamburger Mobile (Visible sur téléphones) */}

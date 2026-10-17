@@ -5,6 +5,7 @@ import Image from "next/image";
 import { Product } from "@/types/store";
 import { formatPrice } from "@/lib/utils";
 import { ShoppingBag, Check, MessageCircle, Heart, Share2, Sparkles } from "lucide-react";
+import { useCart } from "@/context/CartContext";
 
 interface Props {
   product: Product;
@@ -16,10 +17,12 @@ export function ProductDetailClient({ product }: Props) {
   );
   const [quantity, setQuantity] = useState(1);
   const [isAdded, setIsAdded] = useState(false);
+  const { addItem } = useCart();
 
   const currentPrice = selectedVariant ? selectedVariant.price : product.base_price;
 
   const handleAddToCart = () => {
+    addItem(product, selectedVariant, quantity);
     setIsAdded(true);
     setTimeout(() => setIsAdded(false), 2000);
   };
