@@ -1,13 +1,22 @@
+"use client";
+
+import { useState } from "react";
 import Link from "next/link";
-import { ShoppingBag, MessageCircle } from "lucide-react";
+import { ShoppingBag, MessageCircle, Menu, X, Sparkles } from "lucide-react";
 
 export function Header() {
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+
   return (
     <header className="sticky top-0 z-50 bg-[#FAFAF8]/95 backdrop-blur-md border-b border-[#E7E2DA] transition-all">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex items-center justify-between h-20">
           {/* Logo / Maison de Parfum */}
-          <Link href="/" className="group flex flex-col items-start cursor-pointer focus-visible:ring-2 focus-visible:ring-[#A16207] rounded-sm p-1">
+          <Link 
+            href="/" 
+            className="group flex flex-col items-start cursor-pointer focus-visible:ring-2 focus-visible:ring-[#A16207] rounded-sm p-1"
+            onClick={() => setMobileMenuOpen(false)}
+          >
             <span className="font-serif text-2xl sm:text-3xl tracking-[0.22em] font-light text-[#1C1917] uppercase transition-colors group-hover:text-[#A16207]">
               Club Parfum
             </span>
@@ -16,7 +25,7 @@ export function Header() {
             </span>
           </Link>
 
-          {/* Navigation centrale avec liens vers les endpoints dédiés */}
+          {/* Navigation Bureau */}
           <nav className="hidden md:flex items-center space-x-10 text-xs text-[#57534E] tracking-[0.18em] uppercase font-medium">
             <Link 
               href="/boutique" 
@@ -44,21 +53,23 @@ export function Header() {
             </Link>
           </nav>
 
-          {/* Actions interactives */}
-          <div className="flex items-center space-x-3">
+          {/* Actions Droite */}
+          <div className="flex items-center space-x-2 sm:space-x-3">
+            {/* Conseil WhatsApp */}
             <a
               href="https://wa.me/?text=Bonjour%20Club%20Parfum,%20j'aimerais%20un%20conseil%20personnalis%C3%A9%20sur%20vos%20senteurs"
               target="_blank"
               rel="noopener noreferrer"
-              className="inline-flex items-center gap-2 px-3.5 py-2 text-xs font-medium text-[#1C1917] bg-[#F2EFE9] hover:bg-[#E7E2DA] rounded-full transition-all duration-200 cursor-pointer border border-[#E7E2DA] focus-visible:ring-2 focus-visible:ring-[#A16207]"
+              className="inline-flex items-center gap-1.5 px-3 py-2 text-xs font-medium text-[#1C1917] bg-[#F2EFE9] hover:bg-[#E7E2DA] rounded-full transition-all duration-200 cursor-pointer border border-[#E7E2DA]"
               title="Conseil personnalisé par WhatsApp"
             >
               <MessageCircle className="w-3.5 h-3.5 text-[#A16207]" aria-hidden="true" />
               <span className="hidden sm:inline tracking-wider uppercase text-[11px]">Conseil WhatsApp</span>
             </a>
 
+            {/* Panier */}
             <button
-              className="relative p-2.5 rounded-full text-[#1C1917] hover:bg-[#F2EFE9] transition-colors cursor-pointer min-w-[44px] min-h-[44px] flex items-center justify-center focus-visible:ring-2 focus-visible:ring-[#A16207]"
+              className="relative p-2.5 rounded-full text-[#1C1917] hover:bg-[#F2EFE9] transition-colors cursor-pointer min-w-[44px] min-h-[44px] flex items-center justify-center"
               aria-label="Voir mon panier (0 article)"
             >
               <ShoppingBag className="w-5 h-5 stroke-[1.5]" aria-hidden="true" />
@@ -66,8 +77,60 @@ export function Header() {
                 0
               </span>
             </button>
+
+            {/* Bouton Hamburger Mobile (Visible sur téléphones) */}
+            <button
+              type="button"
+              onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+              className="md:hidden p-2 rounded-xl text-[#1C1917] hover:bg-[#F2EFE9] transition cursor-pointer min-w-[44px] min-h-[44px] flex items-center justify-center"
+              aria-label={mobileMenuOpen ? "Fermer le menu" : "Ouvrir le menu"}
+            >
+              {mobileMenuOpen ? (
+                <X className="w-6 h-6 stroke-[1.5]" />
+              ) : (
+                <Menu className="w-6 h-6 stroke-[1.5]" />
+              )}
+            </button>
           </div>
         </div>
+
+        {/* Menu Déroulant Mobile Interactif */}
+        {mobileMenuOpen && (
+          <div className="md:hidden border-t border-[#E7E2DA] py-5 px-2 space-y-3 bg-[#FAFAF8] animate-in slide-in-from-top-2 duration-200">
+            <Link
+              href="/boutique"
+              onClick={() => setMobileMenuOpen(false)}
+              className="flex items-center justify-between p-3 rounded-xl hover:bg-[#F2EFE9] text-sm font-medium text-[#1C1917] tracking-wider uppercase"
+            >
+              <span>La Boutique (Catalogue)</span>
+              <span className="text-xs text-[#A16207]">→</span>
+            </Link>
+            <Link
+              href="/notre-histoire"
+              onClick={() => setMobileMenuOpen(false)}
+              className="flex items-center justify-between p-3 rounded-xl hover:bg-[#F2EFE9] text-sm font-medium text-[#1C1917] tracking-wider uppercase"
+            >
+              <span>Notre Histoire</span>
+              <span className="text-xs text-[#A16207]">→</span>
+            </Link>
+            <Link
+              href="/livraison"
+              onClick={() => setMobileMenuOpen(false)}
+              className="flex items-center justify-between p-3 rounded-xl hover:bg-[#F2EFE9] text-sm font-medium text-[#1C1917] tracking-wider uppercase"
+            >
+              <span>Livraisons & Retours</span>
+              <span className="text-xs text-[#A16207]">→</span>
+            </Link>
+            <Link
+              href="/admin"
+              onClick={() => setMobileMenuOpen(false)}
+              className="flex items-center justify-between p-3 rounded-xl bg-[#F2EFE9] text-sm font-semibold text-[#A16207] tracking-wider uppercase"
+            >
+              <span>Espace Gestion (Admin)</span>
+              <span className="text-xs">🔒</span>
+            </Link>
+          </div>
+        )}
       </div>
     </header>
   );
