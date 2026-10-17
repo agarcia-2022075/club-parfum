@@ -342,6 +342,24 @@ export default function CheckoutPage() {
                 <p className="text-[10px] text-[#57534E] text-right">TVA non applicable, art. 293 B du CGI</p>
               </div>
 
+              {/* Case à cocher obligatoire d'acceptation des CGV (Droit français de la consommation) */}
+              <div className="pt-2">
+                <label className="flex items-start gap-2.5 text-xs text-[#57534E] cursor-pointer">
+                  <input
+                    type="checkbox"
+                    required
+                    className="mt-0.5 text-[#A16207] focus:ring-[#A16207] rounded-sm"
+                  />
+                  <span>
+                    J'ai lu et j'accepte sans réserve les{" "}
+                    <Link href="/cgv" target="_blank" className="text-[#A16207] underline font-medium hover:text-[#1C1917]">
+                      Conditions Générales de Vente
+                    </Link>{" "}
+                    et je reconnais l'exception au droit de rétractation pour les cosmétiques descellés. *
+                  </span>
+                </label>
+              </div>
+
               {/* Bouton Payer */}
               <button
                 type="submit"

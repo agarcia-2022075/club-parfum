@@ -59,11 +59,12 @@ export function Footer() {
           </div>
 
           <div>
-            <h5 className="font-medium text-white tracking-wider uppercase mb-3">Légal</h5>
+            <h5 className="font-medium text-white tracking-wider uppercase mb-3">Cadre Légal</h5>
             <ul className="space-y-2">
               <li><Link href="/mentions-legales" className="hover:text-white transition">Mentions Légales</Link></li>
               <li><Link href="/cgv" className="hover:text-white transition">Conditions Générales de Vente (CGV)</Link></li>
-              <li><Link href="/politique-retractation" className="hover:text-white transition">Droit de Rétractation</Link></li>
+              <li><Link href="/politique-retractation" className="hover:text-white transition">Droit de Rétractation (14j)</Link></li>
+              <li><Link href="/politique-confidentialite" className="hover:text-white transition">Protection des Données (RGPD)</Link></li>
             </ul>
           </div>
 
