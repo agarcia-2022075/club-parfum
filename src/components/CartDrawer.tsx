@@ -2,7 +2,8 @@
 
 import { useCart } from "@/context/CartContext";
 import { formatPrice } from "@/lib/utils";
-import { X, Trash2, ShoppingBag, ArrowRight, ShieldCheck, Truck } from "lucide-react";
+import { FREE_SHIPPING_THRESHOLD } from "@/types/store";
+import { X, Trash2, ShoppingBag, ArrowRight, ShieldCheck, Truck, Sparkles, Check } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
 import { useEffect } from "react";
@@ -24,11 +25,15 @@ export function CartDrawer() {
 
   if (!isOpen) return null;
 
+  const isFreeShipping = subtotal >= FREE_SHIPPING_THRESHOLD;
+  const remainingForFree = Math.max(0, FREE_SHIPPING_THRESHOLD - subtotal);
+  const progressPercent = Math.min(100, Math.round((subtotal / FREE_SHIPPING_THRESHOLD) * 100));
+
   return (
     <div className="fixed inset-0 z-50 overflow-hidden animate-in fade-in duration-200">
       {/* Fond sombre cliquable pour fermer */}
       <div
-        className="absolute inset-0 bg-black/40 backdrop-blur-xs transition-opacity"
+        className="absolute inset-0 bg-black/50 backdrop-blur-xs transition-opacity"
         onClick={closeCart}
         aria-hidden="true"
       />
@@ -37,25 +42,63 @@ export function CartDrawer() {
         <aside className="w-screen max-w-md bg-white border-l border-[#E7E2DA] shadow-2xl flex flex-col justify-between animate-in slide-in-from-right duration-300">
           
           {/* En-tête du Panier */}
-          <div className="p-6 border-b border-[#F2EFE9] flex items-center justify-between bg-[#FAFAF8]">
-            <div className="flex items-center gap-2">
-              <ShoppingBag className="w-5 h-5 text-[#A16207]" />
-              <h2 className="font-serif text-2xl font-normal text-[#1C1917]">
-                Votre Panier
-              </h2>
-              <span className="text-xs bg-[#F2EFE9] text-[#57534E] px-2 py-0.5 rounded-full font-medium">
-                {totalCount}
-              </span>
+          <div className="border-b border-[#F2EFE9] bg-[#FAFAF8]">
+            <div className="p-6 pb-4 flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <ShoppingBag className="w-5 h-5 text-[#A16207]" aria-hidden="true" />
+                <h2 className="font-serif text-2xl font-normal text-[#1C1917]">
+                  Votre Panier
+                </h2>
+                <span className="text-xs bg-[#F2EFE9] text-[#57534E] px-2.5 py-0.5 rounded-full font-semibold">
+                  {totalCount}
+                </span>
+              </div>
+
+              <button
+                type="button"
+                onClick={closeCart}
+                className="p-2 text-[#57534E] hover:text-[#1C1917] rounded-full hover:bg-[#F2EFE9] transition cursor-pointer min-w-[40px] min-h-[40px] flex items-center justify-center"
+                aria-label="Fermer le panier"
+              >
+                <X className="w-5 h-5" />
+              </button>
             </div>
 
-            <button
-              type="button"
-              onClick={closeCart}
-              className="p-2 text-[#57534E] hover:text-[#1C1917] rounded-full hover:bg-[#F2EFE9] transition cursor-pointer min-w-[40px] min-h-[40px] flex items-center justify-center"
-              aria-label="Fermer le panier"
-            >
-              <X className="w-5 h-5" />
-            </button>
+            {/* BARRE DE PROGRESSION LIVRAISON OFFERTE DÈS 60 € (monparfum.net) */}
+            {items.length > 0 && (
+              <div className="px-6 pb-4 pt-1">
+                <div className="p-3 rounded-xl bg-white border border-[#E7E2DA] space-y-2">
+                  <div className="flex items-center justify-between text-xs sm:text-[13px]">
+                    {isFreeShipping ? (
+                      <span className="flex items-center gap-1.5 font-medium text-emerald-800">
+                        <Check className="w-4 h-4 text-emerald-700" aria-hidden="true" />
+                        <span>Félicitations ! La livraison standard vous est offerte.</span>
+                      </span>
+                    ) : (
+                      <span className="text-[#57534E] text-xs leading-snug">
+                        Plus que <strong className="text-[#A16207] font-semibold">{formatPrice(remainingForFree)}</strong> pour bénéficier de la livraison offerte.
+                      </span>
+                    )}
+                    <span className="text-xs text-[#A16207] font-bold shrink-0 ml-2">
+                      {progressPercent}%
+                    </span>
+                  </div>
+
+                  {/* Jauge visuelle */}
+                  <div className="w-full h-1.5 bg-[#F2EFE9] rounded-full overflow-hidden">
+                    <div
+                      className={`h-full transition-all duration-500 rounded-full ${
+                        isFreeShipping ? "bg-emerald-700" : "bg-[#A16207]"
+                      }`}
+                      style={{ width: `${progressPercent}%` }}
+                    />
+                  </div>
+                  <p className="text-[11px] text-[#57534E]/80 text-right">
+                    Seuil livraison offerte : 60,00 € (Point Relais & Colissimo)
+                  </p>
+                </div>
+              </div>
+            )}
           </div>
 
           {/* Liste des articles */}
@@ -73,7 +116,7 @@ export function CartDrawer() {
                   <Link
                     href="/boutique"
                     onClick={closeCart}
-                    className="inline-flex items-center gap-2 px-6 py-3 rounded-xl bg-[#1C1917] text-white text-xs font-semibold uppercase tracking-wider hover:bg-[#A16207] transition"
+                    className="inline-flex items-center gap-2 px-6 py-3 rounded-xl bg-[#1C1917] text-white text-xs font-semibold uppercase tracking-wider hover:bg-[#A16207] transition cursor-pointer"
                   >
                     <span>Découvrir la boutique</span>
                     <ArrowRight className="w-3.5 h-3.5" />
@@ -102,11 +145,11 @@ export function CartDrawer() {
                           <Link
                             href={`/produits/${item.slug}`}
                             onClick={closeCart}
-                            className="font-serif text-base font-medium text-[#1C1917] hover:text-[#A16207] transition line-clamp-1"
+                            className="font-serif text-base font-medium text-[#1C1917] hover:text-[#A16207] transition line-clamp-1 cursor-pointer"
                           >
                             {item.name}
                           </Link>
-                          <span className="text-[11px] text-[#A16207] font-medium block mt-0.5">
+                          <span className="text-xs text-[#A16207] font-medium block mt-0.5">
                             {item.variantLabel}
                           </span>
                         </div>
@@ -159,16 +202,18 @@ export function CartDrawer() {
           {/* Pied du Panier (Sous-total & Validation) */}
           {items.length > 0 && (
             <div className="p-6 border-t border-[#E7E2DA] bg-[#FAFAF8] space-y-4">
-              <div className="space-y-1.5 text-xs">
+              <div className="space-y-1.5 text-sm">
                 <div className="flex justify-between text-[#57534E]">
                   <span>Sous-total</span>
                   <span className="font-serif text-base font-semibold text-[#1C1917]">
                     {formatPrice(subtotal)}
                   </span>
                 </div>
-                <div className="flex justify-between text-[11px] text-[#57534E]">
+                <div className="flex justify-between text-xs text-[#57534E]">
                   <span>Frais de livraison</span>
-                  <span>Calculés à l'étape suivante (dès 4,50 €)</span>
+                  <span className={isFreeShipping ? "text-emerald-800 font-semibold" : ""}>
+                    {isFreeShipping ? "Offert (Dès 60 € d'achat)" : "Calculés à l'étape suivante (dès 4,50 €)"}
+                  </span>
                 </div>
               </div>
 
@@ -176,21 +221,21 @@ export function CartDrawer() {
               <Link
                 href="/commander"
                 onClick={closeCart}
-                className="w-full min-h-[50px] py-3.5 px-6 rounded-xl bg-[#1C1917] hover:bg-[#A16207] text-white text-xs font-semibold tracking-wider uppercase transition-all duration-300 flex items-center justify-center gap-2 shadow-md cursor-pointer"
+                className="w-full min-h-[50px] py-3.5 px-6 rounded-xl bg-[#1C1917] hover:bg-[#A16207] text-white text-sm font-medium tracking-[0.14em] uppercase transition-all duration-300 flex items-center justify-center gap-2 shadow-md cursor-pointer"
               >
                 <span>Valider la commande</span>
                 <ArrowRight className="w-4 h-4" />
               </Link>
 
               {/* Rassurance sous le bouton */}
-              <div className="pt-2 flex items-center justify-center gap-4 text-[10px] text-[#57534E]">
+              <div className="pt-2 flex items-center justify-center gap-4 text-xs text-[#57534E]">
                 <div className="flex items-center gap-1">
-                  <ShieldCheck className="w-3.5 h-3.5 text-[#A16207]" />
-                  <span>Paiement sécurisé</span>
+                  <ShieldCheck className="w-4 h-4 text-[#A16207]" />
+                  <span>Paiement 100% sécurisé</span>
                 </div>
                 <div className="flex items-center gap-1">
-                  <Truck className="w-3.5 h-3.5 text-[#A16207]" />
-                  <span>Point Relais & Colissimo</span>
+                  <Truck className="w-4 h-4 text-[#A16207]" />
+                  <span>Mondial Relay & Colissimo</span>
                 </div>
               </div>
             </div>

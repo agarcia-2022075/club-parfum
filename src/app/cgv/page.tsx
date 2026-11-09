@@ -14,7 +14,7 @@ export default function CGVPage() {
       <Header />
 
       <main className="flex-1 py-12 sm:py-20 max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 w-full">
-        <nav aria-label="Fil d'Ariane" className="mb-8 flex items-center gap-2 text-xs text-[#57534E]">
+        <nav aria-label="Fil d'Ariane" className="mb-8 flex items-center gap-2 text-sm text-[#57534E]">
           <Link href="/" className="hover:text-[#1C1917] transition-colors">Accueil</Link>
           <span>/</span>
           <span className="text-[#1C1917] font-medium">Conditions Générales de Vente</span>
@@ -27,12 +27,12 @@ export default function CGVPage() {
           <h1 className="font-serif text-4xl sm:text-5xl text-[#1C1917] font-normal tracking-tight">
             Conditions Générales de Vente
           </h1>
-          <p className="mt-3 text-xs sm:text-sm text-[#57534E] leading-relaxed font-light">
+          <p className="mt-3 text-sm sm:text-base text-[#57534E] leading-relaxed font-normal">
             En vigueur au 1er janvier 2026. Applicables aux commandes passées sur la boutique en ligne Club Parfum à destination de la France métropolitaine.
           </p>
         </header>
 
-        <div className="space-y-8 text-xs sm:text-sm text-[#57534E] leading-relaxed font-light">
+        <div className="space-y-8 text-sm sm:text-base text-[#44403C] leading-relaxed font-normal">
           
           {/* Article 1 : Objet et Champ d'application */}
           <section className="bg-white p-6 sm:p-8 rounded-2xl border border-[#E7E2DA] space-y-3 shadow-xs">
@@ -122,9 +122,9 @@ export default function CGVPage() {
               Les livraisons s'effectuent exclusivement en France métropolitaine via :
             </p>
             <ul className="space-y-1.5 pl-4 border-l-2 border-[#A16207]/40 text-[#1C1917]">
-              <li><strong>Point Relais (Mondial Relay) :</strong> 4,50 € — Mise à disposition sous 3 à 5 jours ouvrés dans le commerce choisi. Le colis reste disponible 8 jours calendaires.</li>
-              <li><strong>Colissimo Domicile (La Poste) :</strong> 6,90 € — Livraison directe en boîte aux lettres sous 48h à 72h ouvrées.</li>
-              <li><strong>Livraison Express (Chronopost / Expert) :</strong> 11,90 € — Remise contre signature sous 24h à 48h.</li>
+              <li><strong>Point Relais (Mondial Relay) :</strong> 4,50 € (Offert dès 60 € d&apos;achat) — Mise à disposition sous 3 à 5 jours ouvrés dans le commerce choisi. Le colis reste disponible 8 jours calendaires.</li>
+              <li><strong>Colissimo Domicile (La Poste) :</strong> 6,90 € (Offert dès 60 € d&apos;achat) — Livraison directe en boîte aux lettres sous 48h à 72h ouvrées.</li>
+              <li><strong>Livraison Express (Chronopost) :</strong> 11,90 € — Remise contre signature sous 24h ouvrées.</li>
             </ul>
             <p>
               Les délais de livraison sont indiqués à titre indicatif selon les données des transporteurs. En cas de dépassement de plus de 30 jours non imputable à un cas de force majeure, le Client peut solliciter la résolution de la vente et son remboursement intégral (art. L.216-2 du Code de la consommation).

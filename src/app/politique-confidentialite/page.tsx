@@ -14,7 +14,7 @@ export default function PolitiqueConfidentialitePage() {
       <Header />
 
       <main className="flex-1 py-12 sm:py-20 max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 w-full">
-        <nav aria-label="Fil d'Ariane" className="mb-8 flex items-center gap-2 text-xs text-[#57534E]">
+        <nav aria-label="Fil d'Ariane" className="mb-8 flex items-center gap-2 text-sm text-[#57534E]">
           <Link href="/" className="hover:text-[#1C1917] transition-colors">Accueil</Link>
           <span>/</span>
           <span className="text-[#1C1917] font-medium">Politique de Confidentialité</span>
@@ -27,12 +27,12 @@ export default function PolitiqueConfidentialitePage() {
           <h1 className="font-serif text-4xl sm:text-5xl text-[#1C1917] font-normal tracking-tight">
             Politique de Confidentialité & RGPD
           </h1>
-          <p className="mt-3 text-xs sm:text-sm text-[#57534E] leading-relaxed font-light">
-            Club Parfum s'engage à protéger la confidentialité de vos données personnelles conformément au Règlement Général sur la Protection des Données (RGPD - Règlement UE 2016/679) et à la loi Informatique et Libertés.
+          <p className="mt-3 text-sm sm:text-base text-[#57534E] leading-relaxed font-normal">
+            Club Parfum s&apos;engage à protéger la confidentialité de vos données personnelles conformément au Règlement Général sur la Protection des Données (RGPD - Règlement UE 2016/679) et à la loi Informatique et Libertés.
           </p>
         </header>
 
-        <div className="space-y-8 text-xs sm:text-sm text-[#57534E] leading-relaxed font-light">
+        <div className="space-y-8 text-sm sm:text-base text-[#44403C] leading-relaxed font-normal">
           
           {/* Données collectées */}
           <section className="bg-white p-6 sm:p-8 rounded-2xl border border-[#E7E2DA] space-y-3 shadow-xs">

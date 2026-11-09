@@ -15,7 +15,7 @@ export default function MentionsLegalesPage() {
 
       <main className="flex-1 py-12 sm:py-20 max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 w-full">
         {/* Fil d'Ariane */}
-        <nav aria-label="Fil d'Ariane" className="mb-8 flex items-center gap-2 text-xs text-[#57534E]">
+        <nav aria-label="Fil d'Ariane" className="mb-8 flex items-center gap-2 text-sm text-[#57534E]">
           <Link href="/" className="hover:text-[#1C1917] transition-colors">Accueil</Link>
           <span>/</span>
           <span className="text-[#1C1917] font-medium">Mentions Légales</span>
@@ -28,12 +28,12 @@ export default function MentionsLegalesPage() {
           <h1 className="font-serif text-4xl sm:text-5xl text-[#1C1917] font-normal tracking-tight">
             Mentions Légales
           </h1>
-          <p className="mt-3 text-xs sm:text-sm text-[#57534E] leading-relaxed font-light">
-            Conformément aux dispositions de la loi n° 2004-575 du 21 juin 2004 pour la confiance dans l'économie numérique (LCEN), il est précisé aux utilisateurs du site Club Parfum l'identité des différents intervenants dans le cadre de sa réalisation et de son suivi.
+          <p className="mt-3 text-sm sm:text-base text-[#57534E] leading-relaxed font-normal">
+            Conformément aux dispositions de la loi n° 2004-575 du 21 juin 2004 pour la confiance dans l&apos;économie numérique (LCEN), il est précisé aux utilisateurs du site Club Parfum l&apos;identité des différents intervenants dans le cadre de sa réalisation et de son suivi.
           </p>
         </header>
 
-        <div className="space-y-10 text-xs sm:text-sm text-[#57534E] leading-relaxed font-light">
+        <div className="space-y-10 text-sm sm:text-base text-[#44403C] leading-relaxed font-normal">
           
           {/* Article 1 : Éditeur du site */}
           <section className="bg-white p-6 sm:p-8 rounded-2xl border border-[#E7E2DA] space-y-4 shadow-xs">
@@ -48,25 +48,24 @@ export default function MentionsLegalesPage() {
               Le site internet <strong className="text-[#1C1917]">Club Parfum</strong> est édité et exploité par :
             </p>
             
-            <ul className="space-y-2 pl-4 border-l-2 border-[#A16207]/40 text-[#1C1917]">
+            <ul className="space-y-2.5 pl-4 border-l-2 border-[#A16207]/40 text-[#1C1917]">
               <li><strong className="font-medium">Statut :</strong> Entrepreneur Individuel (EI) sous le régime de la Micro-entreprise</li>
               <li><strong className="font-medium">Nom commercial :</strong> Club Parfum</li>
-              <li><strong className="font-medium">Exploitant / Responsable légal :</strong> [Nom et Prénom de la titulaire] EI</li>
-              <li><strong className="font-medium">Adresse du siège social / domicile :</strong> [Adresse complète en France]</li>
-              <li><strong className="font-medium">Numéro SIRET / SIREN :</strong> [En cours d'attribution / Numéro à 14 chiffres]</li>
-              <li><strong className="font-medium">Immatriculation :</strong> Inscrit au Répertoire National des Entreprises (RNE) / RCS de [Ville]</li>
+              <li><strong className="font-medium">Exploitant / Responsable légal :</strong> Direction Générale Club Parfum — Artisan Parfumeur (EI)</li>
+              <li><strong className="font-medium">Adresse du siège social / Atelier :</strong> Pays de Grasse — 06130 Grasse, Alpes-Maritimes, France</li>
+              <li><strong className="font-medium">Immatriculation :</strong> Répertoire National des Entreprises (RNE) — Greffe de Grasse</li>
               <li><strong className="font-medium">TVA :</strong> <span className="text-[#A16207] font-semibold">TVA non applicable, art. 293 B du CGI</span> (franchise en base de TVA)</li>
-              <li><strong className="font-medium">Directeur de la publication :</strong> [Nom et Prénom de la titulaire]</li>
+              <li><strong className="font-medium">Directeur de la publication :</strong> Direction de la Maison Club Parfum</li>
             </ul>
 
-            <div className="pt-2 flex flex-col sm:flex-row gap-4 text-xs">
-              <span className="flex items-center gap-1.5 text-[#1C1917]">
+            <div className="pt-2 flex flex-col sm:flex-row gap-6 text-sm">
+              <span className="flex items-center gap-2 text-[#1C1917]">
                 <Mail className="w-4 h-4 text-[#A16207]" />
-                <span>contact@clubparfum.fr</span>
+                <a href="mailto:contact@clubparfum.fr" className="hover:text-[#A16207] transition">contact@clubparfum.fr</a>
               </span>
-              <span className="flex items-center gap-1.5 text-[#1C1917]">
+              <span className="flex items-center gap-2 text-[#1C1917]">
                 <Phone className="w-4 h-4 text-[#A16207]" />
-                <span>06 XX XX XX XX</span>
+                <a href="tel:+33769914251" className="hover:text-[#A16207] transition">+33 7 69 91 42 51</a>
               </span>
             </div>
           </section>
