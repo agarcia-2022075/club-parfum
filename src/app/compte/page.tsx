@@ -450,12 +450,57 @@ export default function ComptePage() {
         </nav>
 
         {/* ========================================================================= */}
-        {/* ÉCRAN DE CHARGEMENT PRÉLIMINAIRE                                          */}
+        {/* ÉTAT DE CHARGEMENT SQUELETTE (RÉDUCTION CLS < 0.02)                       */}
         {/* ========================================================================= */}
         {isAuthLoading ? (
-          <div className="py-24 text-center space-y-4 max-w-md mx-auto min-h-[640px] flex flex-col justify-center items-center">
-            <Loader2 className="w-8 h-8 animate-spin text-[#A16207] mx-auto" />
-            <p className="text-sm text-[#57534E]">Chargement sécurisé de votre Espace Membre...</p>
+          <div className="space-y-12 animate-pulse min-h-[460px]" aria-busy="true" aria-label="Chargement de votre compte">
+            {/* En-tête squelette */}
+            <div className="max-w-2xl space-y-3">
+              <div className="h-3 w-44 bg-[#F2EFE9] rounded-full" />
+              <div className="h-8 sm:h-10 w-72 max-w-full bg-[#F2EFE9] rounded-lg" />
+              <div className="h-4 w-96 max-w-full bg-[#F2EFE9] rounded" />
+            </div>
+
+            {/* Grille 12 colonnes squelette */}
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-10 sm:gap-12 items-start">
+              {/* Colonne gauche (7 cols) : Boîtier formulaire */}
+              <div className="lg:col-span-7 bg-white rounded-2xl border border-[#E7E2DA] shadow-xs p-6 sm:p-8 space-y-6">
+                <div className="flex gap-2 p-1 bg-[#F2EFE9] rounded-xl">
+                  <div className="flex-1 h-9 bg-white/80 rounded-lg" />
+                  <div className="flex-1 h-9 bg-transparent rounded-lg" />
+                </div>
+                <div className="space-y-4 pt-2">
+                  <div className="space-y-2">
+                    <div className="h-3.5 w-24 bg-[#F2EFE9] rounded" />
+                    <div className="h-11 w-full bg-[#FAF8F5] rounded-xl border border-[#E7E2DA]/60" />
+                  </div>
+                  <div className="space-y-2">
+                    <div className="h-3.5 w-28 bg-[#F2EFE9] rounded" />
+                    <div className="h-11 w-full bg-[#FAF8F5] rounded-xl border border-[#E7E2DA]/60" />
+                  </div>
+                  <div className="h-12 w-full bg-[#E7E2DA] rounded-xl mt-4" />
+                </div>
+              </div>
+
+              {/* Colonne droite (5 cols) : Carte informative */}
+              <div className="lg:col-span-5 space-y-6">
+                <div className="bg-white rounded-2xl border border-[#E7E2DA] p-6 sm:p-8 space-y-4 shadow-xs">
+                  <div className="w-12 h-12 rounded-full bg-[#F2EFE9] flex items-center justify-center">
+                    <Sparkles className="w-5 h-5 text-[#A16207]/40" />
+                  </div>
+                  <div className="h-5 w-48 bg-[#F2EFE9] rounded" />
+                  <div className="space-y-2">
+                    <div className="h-3.5 w-full bg-[#F2EFE9] rounded" />
+                    <div className="h-3.5 w-4/5 bg-[#F2EFE9] rounded" />
+                  </div>
+                </div>
+
+                <div className="bg-[#F5F2EB]/80 rounded-2xl border border-[#E7E2DA] p-6 space-y-3">
+                  <div className="h-4 w-36 bg-[#E7E2DA] rounded" />
+                  <div className="h-3.5 w-full bg-[#E7E2DA]/70 rounded" />
+                </div>
+              </div>
+            </div>
           </div>
         ) : !user ? (
           /* ========================================================================= */

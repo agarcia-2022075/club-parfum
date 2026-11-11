@@ -35,6 +35,7 @@ import {
   Loader2,
   Star,
   ShieldCheck,
+  Upload,
 } from "lucide-react";
 import { useCatalog } from "@/context/CatalogContext";
 import { formatPrice } from "@/lib/utils";
@@ -2312,29 +2313,41 @@ export default function AdminDashboard() {
                   </div>
 
                   <div>
-                    <label className="block text-xs font-medium text-[#1C1917] mb-1">
-                      Ou téléverser depuis l&apos;ordinateur :
+                    <label className="block text-xs font-medium text-[#1C1917] mb-1.5">
+                      Photo depuis smartphone ou ordinateur :
                     </label>
-                    <label className="w-full py-2 px-3 border border-[#E7E2DA] hover:border-[#A16207] rounded-xl flex items-center justify-center gap-1.5 cursor-pointer bg-[#FAFAF8] text-[#57534E] hover:text-[#1C1917] transition text-xs">
-                      {isUploadingImage ? (
-                        <>
-                          <Loader2 className="w-4 h-4 text-[#A16207] animate-spin" />
-                          <span className="text-[#A16207] font-medium">Téléversement vers Supabase Storage...</span>
-                        </>
-                      ) : (
-                        <>
+                    <div className="flex flex-col sm:flex-row items-center gap-2">
+                      {/* Bouton 1 : Caméra Directe Smartphone */}
+                      <label className="w-full sm:flex-1 py-3 px-3 rounded-xl border border-[#A16207]/40 bg-[#FAF8F5] hover:bg-white text-[#A16207] flex items-center justify-center gap-2 cursor-pointer text-xs font-semibold uppercase tracking-wider shadow-2xs transition">
+                        {isUploadingImage ? (
+                          <Loader2 className="w-4 h-4 animate-spin text-[#A16207]" />
+                        ) : (
                           <Camera className="w-4 h-4 text-[#A16207]" />
-                          <span>Choisir une photo locale (Cloud CDN)</span>
-                        </>
-                      )}
-                      <input
-                        type="file"
-                        accept="image/jpeg,image/png,image/webp,image/avif"
-                        disabled={isUploadingImage}
-                        onChange={handleImageFileUpload}
-                        className="hidden"
-                      />
-                    </label>
+                        )}
+                        <span>Prendre une photo</span>
+                        <input
+                          type="file"
+                          accept="image/jpeg,image/png,image/webp,image/avif"
+                          capture="environment"
+                          disabled={isUploadingImage}
+                          onChange={handleImageFileUpload}
+                          className="hidden"
+                        />
+                      </label>
+
+                      {/* Bouton 2 : Galerie / Fichiers PC ou Smartphone */}
+                      <label className="w-full sm:flex-1 py-3 px-3 rounded-xl border border-[#E7E2DA] bg-white hover:bg-[#FAFAF8] text-[#57534E] flex items-center justify-center gap-2 cursor-pointer text-xs font-medium uppercase tracking-wider transition">
+                        <Upload className="w-4 h-4 text-[#57534E]" />
+                        <span>Galerie / Fichiers</span>
+                        <input
+                          type="file"
+                          accept="image/jpeg,image/png,image/webp,image/avif"
+                          disabled={isUploadingImage}
+                          onChange={handleImageFileUpload}
+                          className="hidden"
+                        />
+                      </label>
+                    </div>
                   </div>
                 </div>
 

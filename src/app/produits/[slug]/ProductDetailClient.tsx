@@ -103,9 +103,14 @@ export function ProductDetailClient({ product: initialProduct, slug }: Props) {
   const whatsappUrl = `https://wa.me/33769914251?text=${encodeURIComponent(shareText)}`;
 
   const isCandle = product.category_name.toLowerCase().includes("bougie");
-  const productImage = (product.images && product.images.length > 0)
+  const rawImage = (product.images && product.images.length > 0)
     ? product.images[0]
-    : "https://images.unsplash.com/photo-1603006905003-be475563bc59?auto=format&fit=crop&q=80&w=800";
+    : "https://images.unsplash.com/photo-1603006905003-be475563bc59?auto=format&fit=crop&q=75&w=640";
+
+  // Compression optimisée pour LCP sur les URLs Unsplash
+  const productImage = rawImage.includes("images.unsplash.com") && rawImage.includes("w=800")
+    ? rawImage.replace("w=800", "w=640&q=75")
+    : rawImage;
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-12 gap-12 lg:gap-16 items-start">
@@ -116,7 +121,7 @@ export function ProductDetailClient({ product: initialProduct, slug }: Props) {
             src={productImage}
             alt={product.name}
             fill
-            sizes="(max-width: 1024px) 100vw, 50vw"
+            sizes="(max-width: 768px) 100vw, 540px"
             className={`object-cover object-center transition-all duration-500 ${
               isOutOfStock ? "grayscale-30 opacity-85" : ""
             }`}

@@ -32,34 +32,60 @@ export default function Home() {
 
       <main className="flex-1">
         {/* ========================================================= */}
-        {/* SECCIÓN 1: HERO EDITORIAL INMERSIVO                        */}
+        {/* SECCIÓN 1: HERO EDITORIAL INMERSIVO (MOBILE-FIRST)         */}
         {/* ========================================================= */}
-        <section className="relative bg-[#F5F2EB]/60 border-b border-[#E7E2DA] pt-12 pb-16 lg:pt-16 lg:pb-20">
+        <section className="relative bg-[#F5F2EB]/60 border-b border-[#E7E2DA] pt-8 pb-12 sm:pt-12 sm:pb-16 lg:pt-16 lg:pb-20">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-            <div className="grid grid-cols-1 lg:grid-cols-12 gap-10 lg:gap-14 items-center">
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 lg:gap-14 items-center">
               {/* Colonne gauche : Titre & Proposition éditoriale */}
-              <div className="lg:col-span-7 space-y-6 text-center lg:text-left">
+              <div className="lg:col-span-7 space-y-4 sm:space-y-6 text-left sm:text-center lg:text-left">
                 {/* Badge éditorial authentique */}
-                <div className="inline-flex items-center gap-2 px-3.5 py-1.5 bg-white border border-[#E7E2DA] text-xs font-semibold tracking-[0.22em] text-[#A16207] uppercase">
-                  <Sparkles className="w-3.5 h-3.5 text-[#A16207]" aria-hidden="true" />
-                  <span>Artisan Parfumeur • Maison de Senteurs • Essences Nobles de Grasse</span>
+                <div className="inline-flex items-center gap-1.5 sm:gap-2 px-3 py-1 sm:px-3.5 sm:py-1.5 bg-white border border-[#E7E2DA] text-[11px] sm:text-xs font-semibold tracking-[0.2em] sm:tracking-[0.22em] text-[#A16207] uppercase shadow-2xs">
+                  <Sparkles className="w-3.5 h-3.5 text-[#A16207] shrink-0" aria-hidden="true" />
+                  <span className="truncate">Artisan Parfumeur • Maison de Senteurs • Grasse</span>
                 </div>
 
-                <div className="space-y-3">
-                  <h1 className="font-serif text-4xl sm:text-5xl lg:text-[60px] text-[#1C1917] font-normal leading-[1.15] tracking-tight">
+                <div className="space-y-2 sm:space-y-3">
+                  <h1 className="font-serif text-3xl sm:text-4xl lg:text-[60px] text-[#1C1917] font-normal leading-[1.14] lg:leading-[1.15] tracking-tight">
                     Votre signature parfumée, l&apos;âme de votre maison.
                   </h1>
                 </div>
 
-                <p className="text-base sm:text-lg text-[#44403C] max-w-xl mx-auto lg:mx-0 leading-relaxed font-light">
-                  Des créations parfumées artisanales élaborées avec les essences nobles de Grasse : Eaux de Parfum haute concentration (15% à 20%), bougies 100% cire végétale et diffuseurs d&apos;intérieur.
+                {/* Carte visuelle mobile intégrée au premier pliegue */}
+                <div className="lg:hidden relative aspect-[16/10] sm:aspect-[2/1] w-full overflow-hidden rounded-2xl border border-[#E7E2DA] shadow-md bg-[#F2EFE9] my-2">
+                  <Image
+                    src="https://images.unsplash.com/photo-1603006905003-be475563bc59?auto=format&fit=crop&q=75&w=720"
+                    alt="Création parfumée artisanale Club Parfum Grasse"
+                    fill
+                    sizes="(max-width: 640px) 90vw, (max-width: 1024px) 50vw, 480px"
+                    className="object-cover"
+                    priority
+                  />
+                  <div className="absolute inset-0 bg-gradient-to-t from-black/55 via-transparent to-transparent pointer-events-none" />
+                  <div className="absolute bottom-2.5 left-2.5 right-2.5 flex items-center justify-between">
+                    <span className="px-2.5 py-1 rounded-full bg-white/95 backdrop-blur-xs text-[10px] sm:text-xs font-semibold uppercase tracking-[0.14em] text-[#1C1917] shadow-xs border border-[#E7E2DA]/80">
+                      Format Découverte 10 ml dès 9,90 €
+                    </span>
+                    <span className="text-[10px] sm:text-xs text-white/90 font-medium drop-shadow-xs">
+                      Grasse • France
+                    </span>
+                  </div>
+                </div>
+
+                <p className="text-sm sm:text-base lg:text-lg text-[#44403C] max-w-xl mx-auto lg:mx-0 leading-relaxed font-light">
+                  <span className="lg:hidden">
+                    Créations artisanales aux essences de Grasse. Eaux de Parfum haute concentration (15% à 20%) et bougies 100% cire végétale.
+                  </span>
+                  <span className="hidden lg:inline">
+                    Des créations parfumées artisanales élaborées avec les essences nobles de Grasse : Eaux de Parfum haute concentration (15% à 20%), bougies 100% cire végétale et diffuseurs d&apos;intérieur.
+                  </span>
                 </p>
 
-                {/* Double CTA de haut contraste */}
-                <div className="flex flex-col sm:flex-row items-center justify-center lg:justify-start gap-4 pt-2">
+                {/* Double CTA avec psychologie de décision (CRO) */}
+                <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-start sm:justify-center lg:justify-start gap-3 sm:gap-4 pt-1 sm:pt-2">
                   <Link
                     href="/boutique"
-                    className="w-full sm:w-auto min-h-[52px] px-8 py-4 rounded-none sm:rounded-md bg-[#1C1917] hover:bg-[#A16207] text-white text-xs sm:text-[13px] uppercase tracking-[0.18em] font-semibold transition-all duration-300 flex items-center justify-center gap-2 group cursor-pointer shadow-md"
+                    className="w-full sm:w-auto min-h-[48px] px-7 sm:px-8 py-3.5 rounded-xl sm:rounded-md bg-[#1C1917] hover:bg-[#A16207] text-white text-xs sm:text-[13px] uppercase tracking-[0.18em] font-semibold transition-all duration-300 flex items-center justify-center gap-2 group cursor-pointer shadow-md"
                   >
                     <span>Découvrir nos Parfums</span>
                     <ArrowRight className="w-4 h-4 transition-transform group-hover:translate-x-1" aria-hidden="true" />
@@ -67,39 +93,45 @@ export default function Home() {
 
                   <a
                     href="#diagnostic-olfactif"
-                    className="w-full sm:w-auto min-h-[52px] px-7 py-4 rounded-none sm:rounded-md bg-white border border-[#1C1917]/20 hover:border-[#1C1917] text-[#1C1917] text-xs sm:text-[13px] uppercase tracking-[0.16em] font-semibold transition-all duration-300 flex items-center justify-center gap-2 cursor-pointer shadow-xs"
+                    className="w-full sm:w-auto min-h-[42px] sm:min-h-[48px] px-4 py-2 sm:px-5 sm:py-3 rounded-full sm:rounded-md bg-transparent hover:bg-white text-[#A16207] hover:text-[#1C1917] text-xs uppercase tracking-[0.14em] font-medium transition-all duration-300 flex items-center justify-center gap-1.5 border border-[#A16207]/30 hover:border-[#1C1917] shadow-2xs"
                   >
-                    <Sparkles className="w-4 h-4 text-[#A16207]" />
-                    <span>Trouver mon Sillage (30s)</span>
+                    <Sparkles className="w-3.5 h-3.5 text-[#A16207]" />
+                    <span>Trouver mon sillage en 30s →</span>
                   </a>
                 </div>
 
-                {/* Micro-piliers de sérénité */}
-                <div className="pt-3 flex flex-wrap items-center justify-center lg:justify-start gap-y-2 gap-x-6 text-xs sm:text-sm text-[#44403C]">
-                  <span className="flex items-center gap-1.5">
-                    <span className="w-1.5 h-1.5 rounded-full bg-[#A16207]" />
-                    <span>Concentration 15% à 20%</span>
-                  </span>
-                  <span className="flex items-center gap-1.5">
-                    <span className="w-1.5 h-1.5 rounded-full bg-[#A16207]" />
-                    <span>Cires végétales de soja & colza</span>
-                  </span>
-                  <span className="flex items-center gap-1.5">
-                    <span className="w-1.5 h-1.5 rounded-full bg-[#A16207]" />
-                    <span>Livraison offerte dès 60 €</span>
-                  </span>
+                {/* Micro-puntos de confiance */}
+                <div className="pt-2 sm:pt-3">
+                  <p className="sm:hidden text-[11px] text-[#57534E] font-medium tracking-tight">
+                    Grasse (15-20%) • Cires 100% Végétales • Envoi Offert dès 60 €
+                  </p>
+
+                  <div className="hidden sm:flex flex-wrap items-center justify-center lg:justify-start gap-y-2 gap-x-6 text-xs sm:text-sm text-[#44403C]">
+                    <span className="flex items-center gap-1.5">
+                      <span className="w-1.5 h-1.5 rounded-full bg-[#A16207]" />
+                      <span>Concentration 15% à 20%</span>
+                    </span>
+                    <span className="flex items-center gap-1.5">
+                      <span className="w-1.5 h-1.5 rounded-full bg-[#A16207]" />
+                      <span>Cires végétales de soja &amp; colza</span>
+                    </span>
+                    <span className="flex items-center gap-1.5">
+                      <span className="w-1.5 h-1.5 rounded-full bg-[#A16207]" />
+                      <span>Livraison offerte dès 60 €</span>
+                    </span>
+                  </div>
                 </div>
               </div>
 
-              {/* Colonne droite : Composition visuelle éditoriale verticale */}
-              <div className="lg:col-span-5 flex flex-col items-center">
+              {/* Colonne droite : Composition visuelle éditoriale verticale (Desktop) */}
+              <div className="hidden lg:flex lg:col-span-5 flex-col items-center">
                 <div className="w-full max-w-md bg-white p-3 border border-[#E7E2DA] shadow-xl">
                   <div className="relative aspect-[4/5] w-full overflow-hidden bg-[#F2EFE9]">
                     <Image
-                      src="https://images.unsplash.com/photo-1603006905003-be475563bc59?auto=format&fit=crop&q=80&w=1000"
+                      src="https://images.unsplash.com/photo-1603006905003-be475563bc59?auto=format&fit=crop&q=75&w=720"
                       alt="Création parfumée artisanale Club Parfum Grasse"
                       fill
-                      sizes="(max-width: 1024px) 100vw, 420px"
+                      sizes="(max-width: 640px) 90vw, (max-width: 1024px) 50vw, 480px"
                       className="object-cover"
                       priority
                     />
