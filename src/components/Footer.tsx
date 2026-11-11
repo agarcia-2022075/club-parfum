@@ -9,7 +9,7 @@ export function Footer() {
       {/* ========================================================= */}
       <aside
         aria-label="Engagements et Garanties de la Maison"
-        className="bg-[#EDE8DF] text-[#1C1917] border-t border-b border-[#DCD5C9] py-14"
+        className="w-full overflow-hidden bg-[#EDE8DF] text-[#1C1917] border-t border-b border-[#DCD5C9] py-14"
       >
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <h2 className="sr-only">Engagements et Garanties de la Maison</h2>
@@ -59,7 +59,7 @@ export function Footer() {
       {/* ========================================================= */}
       {/* FRANJA 2 : CORPS PRINCIPAL DU PIED DE PAGE NOIR (#1C1917)  */}
       {/* ========================================================= */}
-      <footer className="bg-[#1C1917] text-[#E7E2DA] pt-16 pb-12">
+      <footer className="w-full overflow-hidden bg-[#1C1917] text-[#E7E2DA] pt-16 pb-12">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <h2 className="sr-only">Navigation et Informations de la Maison</h2>
           <div className="grid grid-cols-1 md:grid-cols-4 gap-8 pb-12 text-sm sm:text-[15px] text-[#D6D3D1]">

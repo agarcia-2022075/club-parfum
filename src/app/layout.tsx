@@ -86,7 +86,7 @@ export default function RootLayout({
         <link rel="preconnect" href="https://images.unsplash.com" crossOrigin="anonymous" />
         <link rel="dns-prefetch" href="https://images.unsplash.com" />
       </head>
-      <body className="min-h-full flex flex-col font-sans bg-[#FAFAF8] text-[#1C1917] selection:bg-[#A16207] selection:text-white">
+      <body className="min-h-full flex flex-col font-sans bg-[#FAFAF8] text-[#1C1917] selection:bg-[#A16207] selection:text-white w-full max-w-full overflow-x-hidden">
         <CatalogProvider>
           <AuthProvider>
             <CartProvider>

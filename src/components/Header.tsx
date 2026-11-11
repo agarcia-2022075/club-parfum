@@ -29,7 +29,7 @@ export function Header() {
       {/* Announcement Bar Supérieure (Confiance & Livraison Gratuite) */}
       <aside
         aria-label="Offre spéciale livraison"
-        className="py-2.5 px-4 bg-[#1C1917] text-[#FAFAF8] text-[11px] sm:text-xs tracking-[0.18em] uppercase border-b border-[#44403C]/40 text-center"
+        className="w-full overflow-hidden py-2.5 px-4 bg-[#1C1917] text-[#FAFAF8] text-[11px] sm:text-xs tracking-[0.18em] uppercase border-b border-[#44403C]/40 text-center"
       >
         <div className="max-w-7xl mx-auto flex flex-wrap items-center justify-center gap-x-2 gap-y-1">
           <span>Fabrication Française à Grasse</span>
@@ -44,7 +44,7 @@ export function Header() {
         </div>
       </aside>
 
-      <header className="sticky top-0 z-50 bg-[#FAFAF8]/95 backdrop-blur-md border-b border-[#E7E2DA] transition-all">
+      <header className="w-full overflow-hidden sticky top-0 z-50 bg-[#FAFAF8]/95 backdrop-blur-md border-b border-[#E7E2DA] transition-all">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between min-h-[84px] py-3 gap-2 sm:gap-6">
             {/* Logo / Maison de Parfum en une seule ligne */}

@@ -27,22 +27,25 @@ const OlfactoryQuiz = dynamic(
 
 export default function Home() {
   return (
-    <div className="min-h-screen flex flex-col bg-[#FAFAF8] text-[#1C1917]">
+    <div className="min-h-screen flex flex-col bg-[#FAFAF8] text-[#1C1917] w-full max-w-full overflow-x-hidden">
       <Header />
 
-      <main className="flex-1">
+      <main className="flex-1 w-full max-w-full overflow-x-hidden">
         {/* ========================================================= */}
         {/* SECCIÓN 1: HERO EDITORIAL INMERSIVO (MOBILE-FIRST)         */}
         {/* ========================================================= */}
-        <section className="relative bg-[#F5F2EB]/60 border-b border-[#E7E2DA] pt-8 pb-12 sm:pt-12 sm:pb-16 lg:pt-16 lg:pb-20">
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <section className="relative w-full overflow-hidden bg-[#F5F2EB]/60 border-b border-[#E7E2DA] pt-8 pb-12 sm:pt-12 sm:pb-16 lg:pt-16 lg:pb-20">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 w-full">
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 lg:gap-14 items-center">
               {/* Colonne gauche : Titre & Proposition éditoriale */}
-              <div className="lg:col-span-7 space-y-4 sm:space-y-6 text-left sm:text-center lg:text-left">
+              <div className="lg:col-span-7 space-y-4 sm:space-y-6 text-left sm:text-center lg:text-left min-w-0">
                 {/* Badge éditorial authentique */}
-                <div className="inline-flex items-center gap-1.5 sm:gap-2 px-3 py-1 sm:px-3.5 sm:py-1.5 bg-white border border-[#E7E2DA] text-[11px] sm:text-xs font-semibold tracking-[0.2em] sm:tracking-[0.22em] text-[#A16207] uppercase shadow-2xs">
+                <div className="inline-flex max-w-full items-center gap-1.5 sm:gap-2 px-3 py-1 sm:px-3.5 sm:py-1.5 bg-white border border-[#E7E2DA] text-[10px] sm:text-xs font-semibold tracking-[0.14em] sm:tracking-[0.22em] text-[#A16207] uppercase shadow-2xs">
                   <Sparkles className="w-3.5 h-3.5 text-[#A16207] shrink-0" aria-hidden="true" />
-                  <span className="truncate">Artisan Parfumeur • Maison de Senteurs • Grasse</span>
+                  <span className="truncate min-w-0">
+                    <span className="sm:hidden">Artisan Parfumeur • Grasse</span>
+                    <span className="hidden sm:inline">Artisan Parfumeur • Maison de Senteurs • Grasse</span>
+                  </span>
                 </div>
 
                 <div className="space-y-2 sm:space-y-3">
@@ -102,9 +105,13 @@ export default function Home() {
 
                 {/* Micro-puntos de confiance */}
                 <div className="pt-2 sm:pt-3">
-                  <p className="sm:hidden text-[11px] text-[#57534E] font-medium tracking-tight">
-                    Grasse (15-20%) • Cires 100% Végétales • Envoi Offert dès 60 €
-                  </p>
+                  <div className="sm:hidden flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] text-[#57534E] font-medium tracking-tight">
+                    <span>Grasse (15-20%)</span>
+                    <span className="text-[#A16207]">•</span>
+                    <span>Cires 100% Végétales</span>
+                    <span className="text-[#A16207]">•</span>
+                    <span>Envoi Offert dès 60 €</span>
+                  </div>
 
                   <div className="hidden sm:flex flex-wrap items-center justify-center lg:justify-start gap-y-2 gap-x-6 text-xs sm:text-sm text-[#44403C]">
                     <span className="flex items-center gap-1.5">
@@ -156,7 +163,7 @@ export default function Home() {
         {/* ========================================================= */}
         <section
           aria-label="Engagements de la Maison"
-          className="bg-white border-b border-[#E7E2DA] py-8"
+          className="relative w-full overflow-hidden bg-white border-b border-[#E7E2DA] py-8"
         >
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
             <h2 className="sr-only">Nos Engagements d&apos;Excellence</h2>
