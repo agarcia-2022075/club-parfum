@@ -32,6 +32,7 @@ import {
   ChevronRight,
   TrendingUp,
   SlidersHorizontal,
+  Loader2,
 } from "lucide-react";
 import { useCatalog } from "@/context/CatalogContext";
 import { formatPrice } from "@/lib/utils";
@@ -192,6 +193,8 @@ export default function AdminDashboard() {
   const [pVariants, setPVariants] = useState<ProductVariant[]>([]);
   const [pImageUrl, setPImageUrl] = useState("");
   const [pPreviewImage, setPPreviewImage] = useState<string | null>(null);
+  const [isUploadingImage, setIsUploadingImage] = useState(false);
+  const [uploadStatusMsg, setUploadStatusMsg] = useState<string | null>(null);
 
   // --- ÉTAT GESTION TAXONOMIES (CATÉGORIES & FAMILLES) ---
   const [newCatName, setNewCatName] = useState("");
@@ -449,6 +452,8 @@ export default function AdminDashboard() {
     ]);
     setPImageUrl("");
     setPPreviewImage(null);
+    setUploadStatusMsg(null);
+    setIsUploadingImage(false);
     setShowProductModal(true);
   };
 
@@ -480,20 +485,55 @@ export default function AdminDashboard() {
     );
     setPImageUrl(prod.images[0] || "");
     setPPreviewImage(prod.images[0] || null);
+    setUploadStatusMsg(null);
+    setIsUploadingImage(false);
     setShowProductModal(true);
   };
 
-  const handleImageFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleImageFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (file) {
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        const result = reader.result as string;
-        setPPreviewImage(result);
-        setPImageUrl(result);
-      };
-      reader.readAsDataURL(file);
+    if (!file) return;
+
+    setIsUploadingImage(true);
+    setUploadStatusMsg(null);
+
+    // 1. Tentative de téléversement sécurisé vers l'API Supabase Storage
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+
+      const res = await fetch("/api/upload", {
+        method: "POST",
+        body: formData,
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        if (data.url) {
+          setPPreviewImage(data.url);
+          setPImageUrl(data.url);
+          setUploadStatusMsg("✓ Image hébergée sur le Cloud Supabase (CDN haute vitesse)");
+          setIsUploadingImage(false);
+          return;
+        }
+      } else {
+        const errData = await res.json().catch(() => null);
+        console.warn("Échec upload Supabase Storage, repli FileReader:", errData?.error);
+      }
+    } catch (err) {
+      console.warn("Erreur réseau vers /api/upload, repli FileReader:", err);
     }
+
+    // 2. Repli de secours local avec FileReader pour ne jamais bloquer l'administrateur
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      const result = reader.result as string;
+      setPPreviewImage(result);
+      setPImageUrl(result);
+      setUploadStatusMsg("Image chargée localement (mode hors-ligne)");
+      setIsUploadingImage(false);
+    };
+    reader.readAsDataURL(file);
   };
 
   // Plantilles de variantes
@@ -2142,11 +2182,21 @@ export default function AdminDashboard() {
                       Ou téléverser depuis l&apos;ordinateur :
                     </label>
                     <label className="w-full py-2 px-3 border border-[#E7E2DA] hover:border-[#A16207] rounded-xl flex items-center justify-center gap-1.5 cursor-pointer bg-[#FAFAF8] text-[#57534E] hover:text-[#1C1917] transition text-xs">
-                      <Camera className="w-4 h-4 text-[#A16207]" />
-                      <span>Choisir une photo locale</span>
+                      {isUploadingImage ? (
+                        <>
+                          <Loader2 className="w-4 h-4 text-[#A16207] animate-spin" />
+                          <span className="text-[#A16207] font-medium">Téléversement vers Supabase Storage...</span>
+                        </>
+                      ) : (
+                        <>
+                          <Camera className="w-4 h-4 text-[#A16207]" />
+                          <span>Choisir une photo locale (Cloud CDN)</span>
+                        </>
+                      )}
                       <input
                         type="file"
-                        accept="image/*"
+                        accept="image/jpeg,image/png,image/webp,image/avif"
+                        disabled={isUploadingImage}
                         onChange={handleImageFileUpload}
                         className="hidden"
                       />
@@ -2154,24 +2204,42 @@ export default function AdminDashboard() {
                   </div>
                 </div>
 
+                {/* Message d'état du téléversement */}
+                {uploadStatusMsg && (
+                  <div className="p-2.5 rounded-lg bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs flex items-center gap-2">
+                    <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                    <span>{uploadStatusMsg}</span>
+                  </div>
+                )}
+
                 {(pPreviewImage || pImageUrl) && (
-                  <div className="relative w-28 h-28 rounded-xl overflow-hidden border border-[#E7E2DA] shadow-xs group">
-                    <img
-                      src={pPreviewImage || pImageUrl}
-                      alt="Prévisualisation"
-                      className="w-full h-full object-cover"
-                    />
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setPImageUrl("");
-                        setPPreviewImage(null);
-                      }}
-                      className="absolute top-1 right-1 bg-black/60 text-white rounded-full p-1 hover:bg-black transition cursor-pointer"
-                      title="Supprimer la photo"
-                    >
-                      <X className="w-3.5 h-3.5" />
-                    </button>
+                  <div className="flex items-start gap-3">
+                    <div className="relative w-28 h-28 rounded-xl overflow-hidden border border-[#E7E2DA] shadow-xs group shrink-0">
+                      <img
+                        src={pPreviewImage || pImageUrl}
+                        alt="Prévisualisation"
+                        className="w-full h-full object-cover"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setPImageUrl("");
+                          setPPreviewImage(null);
+                          setUploadStatusMsg(null);
+                        }}
+                        className="absolute top-1 right-1 bg-black/60 text-white rounded-full p-1 hover:bg-black transition cursor-pointer"
+                        title="Supprimer la photo"
+                      >
+                        <X className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+
+                    <div className="text-xs text-[#57534E] space-y-1">
+                      <p className="font-semibold text-[#1C1917]">Aperçu du visuel boutique</p>
+                      <p className="text-[11px] leading-relaxed">
+                        L&apos;image sera optimisée par le CDN Next.js et Vercel pour garantir un affichage instantané aux visiteurs.
+                      </p>
+                    </div>
                   </div>
                 )}
               </div>

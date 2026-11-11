@@ -45,7 +45,6 @@ export function ProductCard({ product }: ProductCardProps) {
           className={`object-cover object-center group-hover:scale-105 transition-transform duration-700 ease-out ${
             isOutOfStock ? "grayscale-30 opacity-80" : ""
           }`}
-          unoptimized
         />
 
         {/* Badge catégorie lisible en haut à gauche */}
@@ -69,7 +68,7 @@ export function ProductCard({ product }: ProductCardProps) {
       <div className="p-6 flex flex-col flex-1 justify-between bg-white">
         <div className="space-y-2">
           {/* Famille olfactive */}
-          <p className="text-xs uppercase tracking-[0.2em] text-[#A16207] font-medium">
+          <p className="text-xs uppercase tracking-[0.2em] text-[#92400E] font-medium">
             {product.olfactory_family
               ? `Famille ${product.olfactory_family}${product.facets ? ` • ${product.facets.split("•")[0].trim()}` : ""}`
               : product.facets || "Haute Parfumerie de Grasse"}

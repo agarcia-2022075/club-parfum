@@ -121,7 +121,6 @@ export function ProductDetailClient({ product: initialProduct, slug }: Props) {
               isOutOfStock ? "grayscale-30 opacity-85" : ""
             }`}
             priority
-            unoptimized
           />
           <div className="absolute top-4 left-4 flex flex-col gap-2">
             <span className="px-3.5 py-1.5 text-xs font-semibold tracking-[0.2em] uppercase bg-[#FAFAF8]/95 backdrop-blur-sm text-[#1C1917] rounded-sm shadow-xs border border-[#E7E2DA]">
@@ -377,7 +376,7 @@ export function ProductDetailClient({ product: initialProduct, slug }: Props) {
                         Grand Format
                       </span>
                     ) : null}
-                    <p className={`text-sm sm:text-[15px] font-semibold ${isSelected && !isOutOfStockVariant ? "text-[#A16207]" : "text-[#1C1917]"}`}>
+                    <p className={`text-sm sm:text-[15px] font-semibold ${isSelected && !isOutOfStockVariant ? "text-[#92400E]" : "text-[#1C1917]"}`}>
                       {v.size_label}
                     </p>
                     <p className="text-sm sm:text-base text-[#57534E] mt-0.5 font-semibold">{formatPrice(v.price)}</p>

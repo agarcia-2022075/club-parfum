@@ -151,12 +151,13 @@ export default async function ProductDetailPage({ params }: Props) {
         {/* Section Reassurance Spécifique au produit (Livraison & Engagement) */}
         {product && (
           <section className="mt-20 pt-12 border-t border-[#E7E2DA] grid grid-cols-1 md:grid-cols-3 gap-8 text-sm text-[#57534E]">
+            <h2 className="sr-only">Services et Engagements Atelier</h2>
             <div className="flex items-start gap-4 p-5 rounded-xl bg-white border border-[#E7E2DA]">
               <div className="p-2.5 rounded-lg bg-[#F2EFE9] text-[#A16207] shrink-0">
                 <Truck className="w-5 h-5 stroke-[1.5]" aria-hidden="true" />
               </div>
               <div>
-                <h4 className="font-semibold text-sm sm:text-[15px] text-[#1C1917] mb-1">Livraison en France</h4>
+                <h3 className="font-semibold text-sm sm:text-[15px] text-[#1C1917] mb-1">Livraison en France</h3>
                 <p className="leading-relaxed">
                   Point Relais dès 4,50 € ou à domicile par Colissimo sous 48h. Offerte dès 60 € d&apos;achat.
                 </p>
@@ -168,7 +169,7 @@ export default async function ProductDetailPage({ params }: Props) {
                 <Sparkles className="w-5 h-5 stroke-[1.5]" aria-hidden="true" />
               </div>
               <div>
-                <h4 className="font-semibold text-sm sm:text-[15px] text-[#1C1917] mb-1">Concentré de Grasse</h4>
+                <h3 className="font-semibold text-sm sm:text-[15px] text-[#1C1917] mb-1">Concentré de Grasse</h3>
                 <p className="leading-relaxed">
                   Essences nobles sans additifs controversés. Bougies 100% cire végétale sans paraffine.
                 </p>
@@ -180,7 +181,7 @@ export default async function ProductDetailPage({ params }: Props) {
                 <ShieldCheck className="w-5 h-5 stroke-[1.5]" aria-hidden="true" />
               </div>
               <div>
-                <h4 className="font-semibold text-sm sm:text-[15px] text-[#1C1917] mb-1">Paiement & Conseil</h4>
+                <h3 className="font-semibold text-sm sm:text-[15px] text-[#1C1917] mb-1">Paiement & Conseil</h3>
                 <p className="leading-relaxed">
                   Règlement chiffré SSL. Conseil olfactif personnalisé disponible sur WhatsApp.
                 </p>

@@ -42,13 +42,14 @@ export default function NotreHistoirePage() {
               src="https://images.unsplash.com/photo-1603006905003-be475563bc59?auto=format&fit=crop&q=80&w=900"
               alt="Atelier Club Parfum création de bougies végétales"
               fill
+              sizes="(max-width: 768px) 100vw, 50vw"
               className="object-cover"
-              unoptimized
+              priority
             />
           </div>
 
           <div className="md:col-span-6 space-y-4">
-            <span className="text-xs font-semibold uppercase tracking-[0.2em] text-[#A16207] block">
+            <span className="text-xs font-semibold uppercase tracking-[0.2em] text-[#92400E] block">
               L&apos;Origine
             </span>
             <h2 className="font-serif text-3xl sm:text-4xl text-[#1C1917] font-normal leading-snug">

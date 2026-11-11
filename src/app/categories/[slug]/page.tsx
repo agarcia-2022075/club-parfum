@@ -87,7 +87,7 @@ export default async function CategoryPage({ params }: Props) {
                 )}
 
                 <div className="space-y-2">
-                  <p className="text-xs sm:text-sm font-semibold uppercase tracking-[0.24em] text-[#A16207]">
+                  <p className="text-xs sm:text-sm font-semibold uppercase tracking-[0.24em] text-[#92400E]">
                     {config.subtitle}
                   </p>
                   <h1 className="font-serif text-3xl sm:text-5xl lg:text-6xl text-[#1C1917] font-normal leading-[1.15] tracking-tight">
@@ -106,9 +106,9 @@ export default async function CategoryPage({ params }: Props) {
                     src={config.heroImage}
                     alt={config.title}
                     fill
+                    sizes="(max-width: 1024px) 100vw, 480px"
                     className="object-cover"
                     priority
-                    unoptimized
                   />
                   <div className="absolute inset-0 bg-gradient-to-t from-black/20 via-transparent to-transparent" />
                 </div>

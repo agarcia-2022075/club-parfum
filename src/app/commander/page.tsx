@@ -1,9 +1,10 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Header } from "@/components/Header";
 import { Footer } from "@/components/Footer";
 import { useCart } from "@/context/CartContext";
+import { useAuth } from "@/context/AuthContext";
 import { SHIPPING_METHODS } from "@/data/mock-data";
 import { formatPrice } from "@/lib/utils";
 import { FREE_SHIPPING_THRESHOLD, ShippingMethod } from "@/types/store";
@@ -17,6 +18,7 @@ import {
   Sparkles,
   AlertCircle,
   Loader2,
+  User,
 } from "lucide-react";
 import { supabase, isSupabaseConfigured } from "@/lib/supabase";
 import Image from "next/image";
@@ -24,6 +26,7 @@ import Link from "next/link";
 
 export default function CheckoutPage() {
   const { items, subtotal, totalCount, clearCart } = useCart();
+  const { user, updateProfile } = useAuth();
 
   const [selectedShipping, setSelectedShipping] = useState<ShippingMethod>(SHIPPING_METHODS[0]);
   const [isSubmitted, setIsSubmitted] = useState(false);
@@ -44,6 +47,24 @@ export default function CheckoutPage() {
     city: "Paris",
     relayChoice: "",
   });
+
+  // Autocomplétion intelligente en 1 clic si le client est connecté
+  useEffect(() => {
+    if (user) {
+      setFormData((prev) => ({
+        ...prev,
+        firstName: prev.firstName || user.firstName || "",
+        lastName: prev.lastName || user.lastName || "",
+        email: prev.email || user.email || "",
+        phone: prev.phone || user.phone || "",
+        address: prev.address || user.address || "",
+        building: prev.building || user.building || "",
+        digicode: prev.digicode || user.digicode || "",
+        postalCode: prev.postalCode === "75011" && user.postalCode ? user.postalCode : prev.postalCode,
+        city: prev.city === "Paris" && user.city ? user.city : prev.city,
+      }));
+    }
+  }, [user]);
 
   const activePostal = formData.postalCode.trim() || "75011";
   const activeCity = formData.city.trim() || "Paris";
@@ -108,8 +129,16 @@ export default function CheckoutPage() {
     // 4. Enregistrer la commande dans Supabase avec await et gestion d'erreurs
     if (isSupabaseConfigured && supabase) {
       try {
-        const orderPayload = {
+        // Blindage UUID : Supabase attend un UUID strict pour user_id (évite l'erreur 'invalid input syntax for type uuid')
+        const isValidUuid = Boolean(
+          user?.id &&
+          /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(user.id)
+        );
+        const validUserId = isValidUuid ? user!.id : null;
+
+        const orderPayload: Record<string, any> = {
           id: orderId,
+          ...(validUserId ? { user_id: validUserId } : {}),
           order_number: orderNum,
           date: new Date().toLocaleDateString("fr-FR", {
             day: "2-digit",
@@ -143,7 +172,15 @@ export default function CheckoutPage() {
           })),
         };
 
-        const { error } = await supabase.from("orders").insert(orderPayload);
+        let { error } = await supabase.from("orders").insert(orderPayload);
+
+        // Fallback automatique si la colonne user_id n'existe pas encore dans la table distante
+        if (error && "user_id" in orderPayload) {
+          console.warn("Échec insertion avec user_id, repli sans user_id:", error.message);
+          const { user_id, ...payloadWithoutUserId } = orderPayload;
+          const retry = await supabase.from("orders").insert(payloadWithoutUserId);
+          error = retry.error;
+        }
 
         if (error) {
           console.error("Erreur enregistrement commande Supabase:", error);
@@ -152,6 +189,25 @@ export default function CheckoutPage() {
           );
           setIsSubmitting(false);
           return;
+        }
+
+        // Si le client est connecté, synchroniser et compléter automatiquement son Carnet d'Adresses
+        if (user) {
+          const profileUpdates: Partial<typeof user> = {};
+          if (!user.address && formData.address) profileUpdates.address = formData.address.trim();
+          if (!user.building && formData.building) profileUpdates.building = formData.building.trim();
+          if (!user.digicode && formData.digicode) profileUpdates.digicode = formData.digicode.trim();
+          if ((!user.postalCode || user.postalCode === "75011") && formData.postalCode) {
+            profileUpdates.postalCode = formData.postalCode.trim();
+          }
+          if ((!user.city || user.city === "Paris") && formData.city) {
+            profileUpdates.city = formData.city.trim();
+          }
+          if (!user.phone && cleanedPhone) profileUpdates.phone = cleanedPhone;
+
+          if (Object.keys(profileUpdates).length > 0) {
+            updateProfile(profileUpdates).catch((err) => console.warn("Erreur auto-sauvegarde profil:", err));
+          }
         }
       } catch (err) {
         console.error("Erreur réseau Supabase:", err);
@@ -296,13 +352,51 @@ export default function CheckoutPage() {
           
           {/* Colonne Gauche : Formulaire Coordonnées & Livraison France */}
           <div className="lg:col-span-7 space-y-8">
+            {/* Bannière Connexion / 1-Clic Espace Client */}
+            {user ? (
+              <div className="p-4 rounded-xl bg-[#F5F2EB] border border-[#E7E2DA] text-[#1C1917] flex items-center justify-between text-xs sm:text-sm">
+                <div className="flex items-center gap-3">
+                  <span className="w-8 h-8 rounded-full bg-[#A16207]/10 text-[#A16207] flex items-center justify-center shrink-0">
+                    <User className="w-4 h-4" />
+                  </span>
+                  <span>
+                    ✨ Connecté(e) en tant que <strong>{user.firstName} {user.lastName}</strong> — Vos coordonnées et carnet d&apos;adresses ont été pré-remplis automatiquement.
+                  </span>
+                </div>
+                <Link
+                  href="/compte"
+                  className="text-xs font-semibold text-[#A16207] hover:underline shrink-0 ml-4 hidden sm:inline"
+                >
+                  Mon Compte →
+                </Link>
+              </div>
+            ) : (
+              <div className="p-4 rounded-xl bg-[#F5F2EB]/90 border border-[#E7E2DA] text-[#57534E] flex items-center justify-between text-xs sm:text-sm">
+                <div className="flex items-center gap-3">
+                  <span className="w-8 h-8 rounded-full bg-[#E7E2DA] text-[#1C1917] flex items-center justify-center shrink-0">
+                    <User className="w-4 h-4" />
+                  </span>
+                  <span>
+                    Vous avez un compte Club Parfum ?{" "}
+                    <Link href="/compte" className="text-[#A16207] font-semibold underline hover:text-[#1C1917]">
+                      Connectez-vous
+                    </Link>{" "}
+                    pour pré-remplir vos coordonnées en 1 clic, ou poursuivez directement en tant qu&apos;invité(e).
+                  </span>
+                </div>
+              </div>
+            )}
+
             {/* 1. Contact */}
             <section className="bg-white p-6 sm:p-8 rounded-2xl border border-[#E7E2DA] space-y-5 shadow-xs">
               <h2 className="font-serif text-2xl text-[#1C1917]">1. Vos coordonnées</h2>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-[#1C1917] mb-1.5">Prénom *</label>
+                  <label htmlFor="checkout-firstname" className="block text-sm font-medium text-[#1C1917] mb-1.5">
+                    Prénom *
+                  </label>
                   <input
+                    id="checkout-firstname"
                     type="text"
                     required
                     placeholder="Marie"
@@ -312,8 +406,11 @@ export default function CheckoutPage() {
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-[#1C1917] mb-1.5">Nom *</label>
+                  <label htmlFor="checkout-lastname" className="block text-sm font-medium text-[#1C1917] mb-1.5">
+                    Nom *
+                  </label>
                   <input
+                    id="checkout-lastname"
                     type="text"
                     required
                     placeholder="Dupont"
@@ -326,8 +423,11 @@ export default function CheckoutPage() {
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-[#1C1917] mb-1.5">E-mail *</label>
+                  <label htmlFor="checkout-email" className="block text-sm font-medium text-[#1C1917] mb-1.5">
+                    E-mail *
+                  </label>
                   <input
+                    id="checkout-email"
                     type="email"
                     required
                     placeholder="marie.dupont@gmail.com"
@@ -337,10 +437,11 @@ export default function CheckoutPage() {
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-[#1C1917] mb-1.5">
+                  <label htmlFor="checkout-phone" className="block text-sm font-medium text-[#1C1917] mb-1.5">
                     Téléphone français (suivi colis) *
                   </label>
                   <input
+                    id="checkout-phone"
                     type="tel"
                     required
                     placeholder="06 12 34 56 78"
@@ -416,10 +517,11 @@ export default function CheckoutPage() {
               <div className="pt-4 border-t border-[#F2EFE9] space-y-4">
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div>
-                    <label className="block text-sm font-medium text-[#1C1917] mb-1.5">
+                    <label htmlFor="checkout-postal-code" className="block text-sm font-medium text-[#1C1917] mb-1.5">
                       Code Postal (5 chiffres) *
                     </label>
                     <input
+                      id="checkout-postal-code"
                       type="text"
                       pattern="[0-9]{5}"
                       maxLength={5}
@@ -431,8 +533,9 @@ export default function CheckoutPage() {
                     />
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-[#1C1917] mb-1.5">Ville *</label>
+                    <label htmlFor="checkout-city" className="block text-sm font-medium text-[#1C1917] mb-1.5">Ville *</label>
                     <input
+                      id="checkout-city"
                       type="text"
                       required
                       placeholder="Paris"
@@ -447,12 +550,13 @@ export default function CheckoutPage() {
                 {selectedShipping.requires_relay_point ? (
                   <div className="pt-2 space-y-2">
                     <div className="flex items-center justify-between">
-                      <label className="block text-sm font-medium text-[#1C1917]">
+                      <label htmlFor="checkout-relay" className="block text-sm font-medium text-[#1C1917]">
                         Point Relais disponible autour de {activePostal} {activeCity} *
                       </label>
                       <span className="text-xs text-[#A16207]">3 points trouvés</span>
                     </div>
                     <select
+                      id="checkout-relay"
                       value={currentRelay}
                       onChange={(e) => setFormData({ ...formData, relayChoice: e.target.value })}
                       className="w-full px-4 py-3 rounded-xl border border-[#E7E2DA] focus:border-[#A16207] focus:outline-none text-sm bg-white text-[#1C1917]"
@@ -470,10 +574,11 @@ export default function CheckoutPage() {
                 ) : (
                   <div className="pt-2 space-y-4">
                     <div>
-                      <label className="block text-sm font-medium text-[#1C1917] mb-1.5">
+                      <label htmlFor="checkout-address" className="block text-sm font-medium text-[#1C1917] mb-1.5">
                         Adresse de livraison *
                       </label>
                       <input
+                        id="checkout-address"
                         type="text"
                         required
                         placeholder="14 Rue des Lilas"
@@ -484,10 +589,11 @@ export default function CheckoutPage() {
                     </div>
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                       <div>
-                        <label className="block text-sm font-medium text-[#1C1917] mb-1.5">
+                        <label htmlFor="checkout-building" className="block text-sm font-medium text-[#1C1917] mb-1.5">
                           Bâtiment / Étage (facultatif)
                         </label>
                         <input
+                          id="checkout-building"
                           type="text"
                           placeholder="Bât B, 3e étage"
                           value={formData.building}
@@ -496,10 +602,11 @@ export default function CheckoutPage() {
                         />
                       </div>
                       <div>
-                        <label className="block text-sm font-medium text-[#1C1917] mb-1.5">
+                        <label htmlFor="checkout-digicode" className="block text-sm font-medium text-[#1C1917] mb-1.5">
                           Digicode / Interphone
                         </label>
                         <input
+                          id="checkout-digicode"
                           type="text"
                           placeholder="A1234 / Dupont"
                           value={formData.digicode}
@@ -525,7 +632,7 @@ export default function CheckoutPage() {
                   <li key={it.id} className="py-3 flex items-center justify-between gap-3 text-sm">
                     <div className="flex items-center gap-3">
                       <div className="relative w-12 h-12 rounded-lg overflow-hidden bg-[#F2EFE9] shrink-0 border border-[#E7E2DA]">
-                        <Image src={it.image} alt={it.name} fill className="object-cover" unoptimized />
+                        <Image src={it.image} alt={it.name} fill sizes="48px" className="object-cover" />
                       </div>
                       <div>
                         <p className="font-medium text-[#1C1917] line-clamp-1">{it.name}</p>

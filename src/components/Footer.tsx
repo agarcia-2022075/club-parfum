@@ -12,15 +12,16 @@ export function Footer() {
         className="bg-[#EDE8DF] text-[#1C1917] border-t border-b border-[#DCD5C9] py-14"
       >
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <h2 className="sr-only">Engagements et Garanties de la Maison</h2>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-8 text-center md:text-left">
             {/* 1. Livraison Offerte */}
             <div className="flex flex-col items-center md:items-start space-y-2.5">
               <div className="p-3.5 bg-white rounded-full text-[#A16207] border border-[#DCD5C9] shadow-2xs">
                 <Truck className="w-5 h-5" aria-hidden="true" />
               </div>
-              <h4 className="font-serif text-xl sm:text-2xl text-[#1C1917] font-medium leading-snug">
+              <h3 className="font-serif text-xl sm:text-2xl text-[#1C1917] font-medium leading-snug">
                 Livraison Offerte dès 60 €
-              </h4>
+              </h3>
               <p className="text-sm sm:text-[15px] text-[#44403C] leading-relaxed max-w-sm font-light">
                 En Point Relais (Mondial Relay dès 4,50 €) ou à domicile (Colissimo dès 6,90 €). Frais entièrement offerts à partir de 60 € d&apos;achat.
               </p>
@@ -31,9 +32,9 @@ export function Footer() {
               <div className="p-3.5 bg-white rounded-full text-[#A16207] border border-[#DCD5C9] shadow-2xs">
                 <Sparkles className="w-5 h-5" aria-hidden="true" />
               </div>
-              <h4 className="font-serif text-xl sm:text-2xl text-[#1C1917] font-medium leading-snug">
+              <h3 className="font-serif text-xl sm:text-2xl text-[#1C1917] font-medium leading-snug">
                 Concentrés Purs de Grasse
-              </h4>
+              </h3>
               <p className="text-sm sm:text-[15px] text-[#44403C] leading-relaxed max-w-sm font-light">
                 Eaux de parfum de haute tenue (15% à 20% d&apos;extraits purs) et bougies 100% cire végétale de soja & colza sans paraffine.
               </p>
@@ -44,9 +45,9 @@ export function Footer() {
               <div className="p-3.5 bg-white rounded-full text-[#A16207] border border-[#DCD5C9] shadow-2xs">
                 <ShieldCheck className="w-5 h-5" aria-hidden="true" />
               </div>
-              <h4 className="font-serif text-xl sm:text-2xl text-[#1C1917] font-medium leading-snug">
+              <h3 className="font-serif text-xl sm:text-2xl text-[#1C1917] font-medium leading-snug">
                 Paiement Sécurisé & Retours
-              </h4>
+              </h3>
               <p className="text-sm sm:text-[15px] text-[#44403C] leading-relaxed max-w-sm font-light">
                 Paiement chiffré SSL 256-bit (Cartes Bancaires CB, Apple Pay, PayPal, Wero). Droit de rétractation de 14 jours pour tout flacon scellé.
               </p>
@@ -60,13 +61,14 @@ export function Footer() {
       {/* ========================================================= */}
       <footer className="bg-[#1C1917] text-[#E7E2DA] pt-16 pb-12">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <h2 className="sr-only">Navigation et Informations de la Maison</h2>
           <div className="grid grid-cols-1 md:grid-cols-4 gap-8 pb-12 text-sm sm:text-[15px] text-[#D6D3D1]">
             {/* Colonne 1 : Identité */}
             <div className="space-y-3">
               <span className="font-serif text-2xl tracking-[0.22em] font-normal text-[#FAFAF8] uppercase block leading-snug">
                 Club Parfum
               </span>
-              <span className="text-[11px] sm:text-xs uppercase tracking-[0.3em] text-[#A16207] font-semibold block -mt-2">
+              <span className="text-[11px] sm:text-xs uppercase tracking-[0.3em] text-[#D4A359] font-semibold block -mt-2">
                 Maison de Senteurs • Grasse
               </span>
               <p className="leading-relaxed text-sm text-[#A8A29E] pt-2 font-light">
@@ -76,7 +78,7 @@ export function Footer() {
                 Atelier & Service Client :{" "}
                 <a
                   href="tel:+33769914251"
-                  className="text-white hover:text-[#A16207] font-medium transition-colors"
+                  className="text-white hover:text-[#D4A359] font-medium transition-colors"
                 >
                   +33 7 69 91 42 51
                 </a>
@@ -85,9 +87,9 @@ export function Footer() {
 
             {/* Colonne 2 : Maison & Collections */}
             <div>
-              <h5 className="text-xs sm:text-[13px] font-semibold text-white tracking-[0.18em] uppercase mb-4">
+              <h3 className="text-xs sm:text-[13px] font-semibold text-white tracking-[0.18em] uppercase mb-4">
                 Maison & Collections
-              </h5>
+              </h3>
               <ul className="space-y-2.5">
                 <li>
                   <Link
@@ -124,9 +126,9 @@ export function Footer() {
                 <li>
                   <Link
                     href="/#diagnostic-olfactif"
-                    className="text-[#A16207] hover:underline transition-colors flex items-center gap-1.5 font-medium"
+                    className="text-[#D4A359] hover:underline transition-colors flex items-center gap-1.5 font-medium"
                   >
-                    <Sparkles className="w-3.5 h-3.5 text-[#A16207]" />
+                    <Sparkles className="w-3.5 h-3.5 text-[#D4A359]" />
                     <span>Diagnostic Olfactif en 30s</span>
                   </Link>
                 </li>
@@ -136,6 +138,14 @@ export function Footer() {
                     className="hover:text-white transition-colors"
                   >
                     Notre Histoire / Qui sommes-nous ?
+                  </Link>
+                </li>
+                <li>
+                  <Link
+                    href="/compte"
+                    className="text-[#E7E2DA] hover:text-[#D4A359] font-medium transition-colors"
+                  >
+                    Mon Compte & Suivi Colis
                   </Link>
                 </li>
                 <li>
@@ -159,7 +169,7 @@ export function Footer() {
                     href="https://wa.me/33769914251?text=Bonjour%20Club%20Parfum,%20j'aimerais%20un%20conseil%20personnalis%C3%A9%20sur%20vos%20senteurs"
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="inline-flex items-center gap-1.5 text-[#A16207] hover:underline transition-colors"
+                    className="inline-flex items-center gap-1.5 text-[#D4A359] hover:underline transition-colors"
                   >
                     <MessageCircle className="w-3.5 h-3.5" aria-hidden="true" />
                     <span>Conseil WhatsApp (+33 7 69 91 42 51)</span>
@@ -170,9 +180,9 @@ export function Footer() {
 
             {/* Colonne 3 : Cadre Légal */}
             <div>
-              <h5 className="text-xs sm:text-[13px] font-semibold text-white tracking-[0.18em] uppercase mb-4">
+              <h3 className="text-xs sm:text-[13px] font-semibold text-white tracking-[0.18em] uppercase mb-4">
                 Cadre Légal & Éthique
-              </h5>
+              </h3>
               <ul className="space-y-2.5">
                 <li>
                   <Link
@@ -211,9 +221,9 @@ export function Footer() {
 
             {/* Colonne 4 : Fiscalité & Statut */}
             <div>
-              <h5 className="text-xs sm:text-[13px] font-semibold text-white tracking-[0.18em] uppercase mb-4">
+              <h3 className="text-xs sm:text-[13px] font-semibold text-white tracking-[0.18em] uppercase mb-4">
                 Fiscalité & Statut
-              </h5>
+              </h3>
               <div className="leading-relaxed text-sm text-[#A8A29E] space-y-2 font-light">
                 <p>
                   Micro-entreprise enregistrée en France sous le régime des artisans parfumeurs.
@@ -282,10 +292,10 @@ export function Footer() {
               </p>
               <Link
                 href="/admin"
-                className="inline-flex items-center gap-1.5 text-xs text-[#A8A29E]/70 hover:text-[#FAFAF8] transition-colors"
+                className="inline-flex items-center gap-1.5 text-xs text-[#D6D3D1] hover:text-[#FAFAF8] transition-colors"
                 title="Espace réservé à la gestion des commandes"
               >
-                <Lock className="w-3.5 h-3.5 text-[#A16207]" />
+                <Lock className="w-3.5 h-3.5 text-[#D4A359]" />
                 <span>Accès Artisane (Gestion)</span>
               </Link>
             </div>

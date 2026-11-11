@@ -87,7 +87,11 @@ export function BoutiqueClient() {
       {/* Barre de Recherche Élégante & Rapide */}
       <div className="max-w-2xl mx-auto">
         <div className="relative">
+          <label htmlFor="boutique-search" className="sr-only">
+            Rechercher une fragrance ou bougie
+          </label>
           <input
+            id="boutique-search"
             type="text"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
@@ -203,6 +207,7 @@ export function BoutiqueClient() {
       </div>
 
       {/* Grille des Produits */}
+      <h2 className="sr-only">Créations Disponibles</h2>
       {filteredProducts.length > 0 ? (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-8 sm:gap-10">
           {filteredProducts.map((product) => (

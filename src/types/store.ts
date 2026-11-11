@@ -74,3 +74,51 @@ export interface FaqItem {
 }
 
 export const FREE_SHIPPING_THRESHOLD = 60; // 60,00 € pour la livraison offerte en France
+
+export interface CustomerProfile {
+  id: string;
+  email: string;
+  firstName: string;
+  lastName: string;
+  phone: string;
+  address: string;
+  building: string;
+  digicode: string;
+  postalCode: string;
+  city: string;
+  favoriteFamily?: string;
+}
+
+export interface OrderItem {
+  name: string;
+  variant: string;
+  qty: number;
+  price: number;
+}
+
+export interface CustomerOrder {
+  id: string;
+  order_number: string;
+  date: string;
+  customer_first_name: string;
+  customer_last_name: string;
+  customer_name: string;
+  customer_email: string;
+  customer_phone: string;
+  shipping_method_id?: string;
+  shipping_method: string;
+  shipping_cost: number;
+  relay_point?: string | null;
+  address?: string | null;
+  building?: string | null;
+  digicode?: string | null;
+  postal_code?: string;
+  city?: string;
+  subtotal: number;
+  total: number;
+  status: "pending" | "shipped" | "delivered" | "cancelled" | string;
+  tracking?: string;
+  items: OrderItem[];
+  created_at?: string;
+  user_id?: string | null;
+}

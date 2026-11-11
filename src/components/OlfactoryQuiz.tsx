@@ -276,15 +276,15 @@ export function OlfactoryQuiz() {
                           src={prod.images[0]}
                           alt={prod.name}
                           fill
+                          sizes="96px"
                           className="object-cover"
-                          unoptimized
                         />
                       </div>
 
                       <div className="flex-1">
                         <div className="flex items-center gap-1.5 mb-1">
                           <span className={`w-2 h-2 rounded-full ${theme.dot}`} />
-                          <span className="text-xs font-semibold uppercase tracking-[0.16em] text-[#A16207]">
+                          <span className="text-xs font-semibold uppercase tracking-[0.16em] text-[#92400E]">
                             {prod.olfactory_family} • {theme.mood}
                           </span>
                         </div>

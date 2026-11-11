@@ -7,6 +7,7 @@
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 
 -- 2. SUPPRESSION PRÉVENTIVE (Optionnelle, pour réinitialisation propre)
+DROP TABLE IF EXISTS customer_profiles CASCADE;
 DROP TABLE IF EXISTS order_items CASCADE;
 DROP TABLE IF EXISTS orders CASCADE;
 DROP TABLE IF EXISTS product_variants CASCADE;
@@ -82,6 +83,7 @@ CREATE TABLE shipping_methods (
 -- 7. TABLE COMMANDES (Format conforme logistique & droit français)
 CREATE TABLE orders (
   id TEXT PRIMARY KEY,
+  user_id UUID REFERENCES auth.users(id) ON DELETE SET NULL,
   order_number TEXT NOT NULL UNIQUE,
   date TEXT NOT NULL,
   customer_first_name TEXT NOT NULL,
@@ -106,6 +108,23 @@ CREATE TABLE orders (
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
+-- 7.1 TABLE PROFILS CLIENTS (Carnet d'adresses & Préférences Olfactives liés à Supabase Auth)
+CREATE TABLE IF NOT EXISTS customer_profiles (
+  id UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
+  email TEXT NOT NULL,
+  first_name TEXT NOT NULL DEFAULT '',
+  last_name TEXT NOT NULL DEFAULT '',
+  phone TEXT DEFAULT '',
+  address TEXT DEFAULT '',
+  building TEXT DEFAULT '',
+  digicode TEXT DEFAULT '',
+  postal_code TEXT DEFAULT '',
+  city TEXT DEFAULT '',
+  favorite_family TEXT DEFAULT 'Orientale',
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
 -- 8. POLITIQUES DE SÉCURITÉ (ROW LEVEL SECURITY - RLS)
 ALTER TABLE categories ENABLE ROW LEVEL SECURITY;
 ALTER TABLE olfactory_families ENABLE ROW LEVEL SECURITY;
@@ -113,6 +132,7 @@ ALTER TABLE products ENABLE ROW LEVEL SECURITY;
 ALTER TABLE product_variants ENABLE ROW LEVEL SECURITY;
 ALTER TABLE shipping_methods ENABLE ROW LEVEL SECURITY;
 ALTER TABLE orders ENABLE ROW LEVEL SECURITY;
+ALTER TABLE customer_profiles ENABLE ROW LEVEL SECURITY;
 
 -- 8.1 Lecture publique du catalogue (visiteurs et clients de la boutique)
 CREATE POLICY "Lecture publique des catégories" ON categories FOR SELECT USING (true);
@@ -121,7 +141,20 @@ CREATE POLICY "Lecture publique des produits" ON products FOR SELECT USING (true
 CREATE POLICY "Lecture publique des variantes" ON product_variants FOR SELECT USING (true);
 CREATE POLICY "Lecture publique des modes de livraison" ON shipping_methods FOR SELECT USING (true);
 
--- 8.2 Création de commande publique validée (intégrité des coordonnées clients et montants positifs)
+-- 8.2 Politiques RLS strictes pour les Profils Clients (Seul le titulaire authentifié peut lire ou modifier son profil)
+DROP POLICY IF EXISTS "Lecture profil personnel" ON customer_profiles;
+CREATE POLICY "Lecture profil personnel" ON customer_profiles
+  FOR SELECT USING (auth.uid() = id);
+
+DROP POLICY IF EXISTS "Insertion profil personnel" ON customer_profiles;
+CREATE POLICY "Insertion profil personnel" ON customer_profiles
+  FOR INSERT WITH CHECK (auth.uid() = id);
+
+DROP POLICY IF EXISTS "Mise à jour profil personnel" ON customer_profiles;
+CREATE POLICY "Mise à jour profil personnel" ON customer_profiles
+  FOR UPDATE USING (auth.uid() = id) WITH CHECK (auth.uid() = id);
+
+-- 8.3 Création de commande publique validée (intégrité des coordonnées clients et montants positifs)
 CREATE POLICY "Création de commande publique validée" ON orders
   FOR INSERT
   WITH CHECK (
@@ -282,3 +315,29 @@ INSERT INTO product_variants (id, product_id, sku, size_label, price, in_stock) 
 ('var-7-1', 'prod-7', 'BRU-ROS-100', 'Flacon Brume 100 ml', 18.90, true),
 ('var-8-1', 'prod-8', 'DIF-CED-100', 'Flacon 100 ml + 8 bâtonnets en rotin', 28.50, true),
 ('var-8-2', 'prod-8', 'DIF-CED-REC200', 'Recharge Éco 200 ml', 22.00, true);
+
+-- ==============================================================================
+-- 10. CONFIGURATION DU BUCKET SUPABASE STORAGE ('products')
+-- ==============================================================================
+-- Création du bucket public pour les photographies de flacons et bougies
+INSERT INTO storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
+VALUES (
+  'products',
+  'products',
+  true,
+  5242880,
+  ARRAY['image/jpeg', 'image/png', 'image/webp', 'image/avif']
+)
+ON CONFLICT (id) DO UPDATE SET
+  public = true,
+  file_size_limit = 5242880,
+  allowed_mime_types = ARRAY['image/jpeg', 'image/png', 'image/webp', 'image/avif'];
+
+-- Politiques RLS pour Storage
+DROP POLICY IF EXISTS "Lecture publique des photos de produits" ON storage.objects;
+CREATE POLICY "Lecture publique des photos de produits" ON storage.objects
+  FOR SELECT USING (bucket_id = 'products');
+
+DROP POLICY IF EXISTS "Téléversement admin des photos de produits" ON storage.objects;
+CREATE POLICY "Téléversement admin des photos de produits" ON storage.objects
+  FOR INSERT WITH CHECK (bucket_id = 'products');

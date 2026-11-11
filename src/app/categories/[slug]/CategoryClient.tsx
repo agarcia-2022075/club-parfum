@@ -114,6 +114,7 @@ export function CategoryClient({ config }: CategoryClientProps) {
       </div>
 
       {/* Grille de produits */}
+      <h2 className="sr-only">Créations de la Catégorie</h2>
       {filteredProducts.length > 0 ? (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-8 sm:gap-10">
           {filteredProducts.map((product) => (

@@ -12,14 +12,17 @@ import {
   ChevronDown,
   ChevronRight,
   ArrowRight,
+  User,
 } from "lucide-react";
 import { useCart } from "@/context/CartContext";
+import { useAuth } from "@/context/AuthContext";
 
 export function Header() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [mobileParfumsOpen, setMobileParfumsOpen] = useState(false);
   const [mobileMaisonOpen, setMobileMaisonOpen] = useState(false);
   const { totalCount, openCart } = useCart();
+  const { user } = useAuth();
 
   return (
     <>
@@ -202,6 +205,24 @@ export function Header() {
                 </span>
               </a>
 
+              {/* Accès Mon Compte Client */}
+              <Link
+                href="/compte"
+                className="relative p-2.5 rounded-full text-[#1C1917] hover:bg-[#F2EFE9] transition-colors cursor-pointer min-w-[40px] min-h-[40px] flex items-center justify-center gap-1.5"
+                aria-label={user ? `Mon Compte (${user.firstName})` : "Se connecter à mon compte"}
+                title={user ? `Mon Espace Client (${user.firstName})` : "Mon Compte / Connexion"}
+              >
+                <User className="w-5 h-5 stroke-[1.5] text-[#1C1917]" aria-hidden="true" />
+                {user ? (
+                  <>
+                    <span className="hidden xl:inline text-xs font-semibold text-[#1C1917] max-w-[85px] truncate">
+                      {user.firstName}
+                    </span>
+                    <span className="w-2 h-2 rounded-full bg-emerald-600 ring-2 ring-white absolute top-1.5 right-1.5" />
+                  </>
+                ) : null}
+              </Link>
+
               {/* Panier interactif connecté au CartContext */}
               <button
                 type="button"
@@ -236,6 +257,29 @@ export function Header() {
           {/* Menu Déroulant Mobile Interactif */}
           {mobileMenuOpen && (
             <div className="lg:hidden border-t border-[#E7E2DA] py-5 px-3 space-y-3 bg-[#FAFAF8] text-[15px]">
+              {/* Accès Mon Compte Mobile */}
+              <Link
+                href="/compte"
+                onClick={() => setMobileMenuOpen(false)}
+                className="flex items-center justify-between p-3.5 rounded-xl bg-white border border-[#E7E2DA] shadow-xs text-[#1C1917] mb-2"
+              >
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-full bg-[#F2EFE9] text-[#A16207] flex items-center justify-center shrink-0">
+                    <User className="w-5 h-5 stroke-[1.5]" />
+                  </div>
+                  <div className="text-left">
+                    <p className="text-sm font-semibold text-[#1C1917] flex items-center gap-1.5">
+                      <span>{user ? `Mon Espace (${user.firstName})` : "Mon Compte & Connexion"}</span>
+                      {user && <span className="w-2 h-2 rounded-full bg-emerald-600 inline-block" />}
+                    </p>
+                    <p className="text-xs text-[#78716C]">
+                      {user ? "Suivi de colis, adresses & profil" : "Suivre un colis ou se connecter"}
+                    </p>
+                  </div>
+                </div>
+                <ChevronRight className="w-4 h-4 text-[#A16207]" />
+              </Link>
+
               {/* Section Parfums */}
               <div className="border-b border-[#E7E2DA] pb-3">
                 <button

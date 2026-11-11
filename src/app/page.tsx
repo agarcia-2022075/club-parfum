@@ -1,8 +1,7 @@
+import dynamic from "next/dynamic";
 import { Header } from "@/components/Header";
 import { Footer } from "@/components/Footer";
 import { FeaturedProducts } from "@/components/FeaturedProducts";
-import { HomeFaqAccordion } from "@/components/HomeFaqAccordion";
-import { OlfactoryQuiz } from "@/components/OlfactoryQuiz";
 import {
   ArrowRight,
   Sparkles,
@@ -16,6 +15,15 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import Image from "next/image";
+
+const HomeFaqAccordion = dynamic(
+  () => import("@/components/HomeFaqAccordion").then((mod) => mod.HomeFaqAccordion),
+  { ssr: true }
+);
+
+const OlfactoryQuiz = dynamic(
+  () => import("@/components/OlfactoryQuiz").then((mod) => mod.OlfactoryQuiz)
+);
 
 export default function Home() {
   return (
@@ -91,9 +99,9 @@ export default function Home() {
                       src="https://images.unsplash.com/photo-1603006905003-be475563bc59?auto=format&fit=crop&q=80&w=1000"
                       alt="Création parfumée artisanale Club Parfum Grasse"
                       fill
+                      sizes="(max-width: 1024px) 100vw, 420px"
                       className="object-cover"
                       priority
-                      unoptimized
                     />
                   </div>
                   {/* Carte inférieure intégrée */}
@@ -119,6 +127,7 @@ export default function Home() {
           className="bg-white border-b border-[#E7E2DA] py-8"
         >
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <h2 className="sr-only">Nos Engagements d&apos;Excellence</h2>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
               {/* Pilier 1 */}
               <div className="flex items-start gap-3.5 p-3">
@@ -249,8 +258,8 @@ export default function Home() {
                     src="https://images.unsplash.com/photo-1592945403244-b3fbafd7f539?auto=format&fit=crop&q=80&w=800"
                     alt="Eaux de Parfum de Grasse"
                     fill
+                    sizes="(max-width: 768px) 100vw, 33vw"
                     className="object-cover object-center group-hover:scale-105 transition-transform duration-700"
-                    unoptimized
                   />
                   <div className="absolute inset-0 bg-gradient-to-t from-[#1C1917]/90 via-[#1C1917]/40 to-transparent transition-opacity" />
 
@@ -280,8 +289,8 @@ export default function Home() {
                     src="https://images.unsplash.com/photo-1603006905003-be475563bc59?auto=format&fit=crop&q=80&w=800"
                     alt="Bougies Végétales Artisanales"
                     fill
+                    sizes="(max-width: 768px) 100vw, 33vw"
                     className="object-cover object-center group-hover:scale-105 transition-transform duration-700"
-                    unoptimized
                   />
                   <div className="absolute inset-0 bg-gradient-to-t from-[#1C1917]/90 via-[#1C1917]/40 to-transparent transition-opacity" />
 
@@ -311,8 +320,8 @@ export default function Home() {
                     src="https://images.unsplash.com/photo-1616949755610-8c9bbc08f138?auto=format&fit=crop&q=80&w=800"
                     alt="Diffuseurs et Brumes d'Intérieur"
                     fill
+                    sizes="(max-width: 768px) 100vw, 33vw"
                     className="object-cover object-center group-hover:scale-105 transition-transform duration-700"
-                    unoptimized
                   />
                   <div className="absolute inset-0 bg-gradient-to-t from-[#1C1917]/90 via-[#1C1917]/40 to-transparent transition-opacity" />
 
@@ -340,7 +349,7 @@ export default function Home() {
               <div className="grid grid-cols-1 lg:grid-cols-12 gap-10 items-center">
                 <div className="lg:col-span-7 space-y-6">
                   <div className="space-y-2">
-                    <span className="text-xs sm:text-sm font-semibold uppercase tracking-[0.24em] text-[#A16207] block">
+                    <span className="text-xs sm:text-sm font-semibold uppercase tracking-[0.24em] text-[#D4A359] block">
                       Savoir-Faire & Noblesse des Matières
                     </span>
                     <h2 className="font-serif text-3xl sm:text-4xl lg:text-5xl text-white font-normal leading-[1.18]">
@@ -354,7 +363,7 @@ export default function Home() {
 
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-5 pt-2 text-sm text-[#E7E2DA]">
                     <div className="flex items-start gap-3">
-                      <Droplets className="w-5 h-5 text-[#A16207] shrink-0 mt-0.5" />
+                      <Droplets className="w-5 h-5 text-[#D4A359] shrink-0 mt-0.5" />
                       <div>
                         <strong className="text-white block font-medium mb-0.5 text-sm sm:text-[15px]">
                           Alcool d&apos;Origine Végétale
@@ -366,7 +375,7 @@ export default function Home() {
                     </div>
 
                     <div className="flex items-start gap-3">
-                      <Flame className="w-5 h-5 text-[#A16207] shrink-0 mt-0.5" />
+                      <Flame className="w-5 h-5 text-[#D4A359] shrink-0 mt-0.5" />
                       <div>
                         <strong className="text-white block font-medium mb-0.5 text-sm sm:text-[15px]">
                           Cire 100% Végétale
@@ -381,7 +390,7 @@ export default function Home() {
                   <div className="pt-4">
                     <Link
                       href="/notre-histoire"
-                      className="inline-flex items-center gap-2 text-xs sm:text-sm uppercase tracking-[0.18em] font-semibold text-[#A16207] hover:text-white transition-colors"
+                      className="inline-flex items-center gap-2 text-xs sm:text-sm uppercase tracking-[0.18em] font-semibold text-[#D4A359] hover:text-white transition-colors"
                     >
                       <span>Découvrir notre histoire complète</span>
                       <ArrowRight className="w-4 h-4" />
@@ -395,8 +404,8 @@ export default function Home() {
                       src="https://images.unsplash.com/photo-1547887537-6158d64c35b3?auto=format&fit=crop&q=80&w=800"
                       alt="Flacon de parfum noble Club Parfum"
                       fill
+                      sizes="(max-width: 1024px) 100vw, 420px"
                       className="object-cover"
-                      unoptimized
                     />
                   </div>
                 </div>
