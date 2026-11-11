@@ -39,6 +39,7 @@ export default function ComptePage() {
     user,
     isLoading: isAuthLoading,
     lockoutSecondsLeft,
+    sessionExpiresAt,
     login,
     register,
     updateProfile,
@@ -746,7 +747,7 @@ export default function ComptePage() {
                           </div>
                           <div>
                             <label htmlFor="reg-phone" className="block text-sm font-medium text-[#1C1917] mb-1.5">
-                              Téléphone mobile *
+                              Téléphone de contact (suivi colis) *
                             </label>
                             <input
                               id="reg-phone"
@@ -754,7 +755,7 @@ export default function ComptePage() {
                               required
                               value={regPhone}
                               onChange={(e) => setRegPhone(e.target.value)}
-                              placeholder="06 12 34 56 78"
+                              placeholder="+33 6 12 34 56 78 ou numéro international"
                               className="w-full px-4 py-3 rounded-xl border border-[#E7E2DA] focus:border-[#A16207] focus:outline-none text-sm text-[#1C1917]"
                             />
                           </div>
@@ -1351,14 +1352,14 @@ export default function ComptePage() {
 
                   <div>
                     <label className="block text-sm font-medium text-[#1C1917] mb-1.5">
-                      Téléphone mobile français (pour le livreur) *
+                      Téléphone de contact (suivi colis) *
                     </label>
                     <input
                       type="tel"
                       required
                       value={addressData.phone}
                       onChange={(e) => setAddressData({ ...addressData, phone: e.target.value })}
-                      placeholder="06 12 34 56 78"
+                      placeholder="+33 6 12 34 56 78 ou numéro international"
                       className="w-full px-4 py-3 rounded-xl border border-[#E7E2DA] focus:border-[#A16207] focus:outline-none text-sm text-[#1C1917]"
                     />
                   </div>
@@ -1405,7 +1406,7 @@ export default function ComptePage() {
 
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div>
-                      <label className="block text-sm font-medium text-[#1C1917] mb-1.5">Code Postal (5 chiffres) *</label>
+                      <label className="block text-sm font-medium text-[#1C1917] mb-1.5">Code Postal *</label>
                       <input
                         type="text"
                         required
@@ -1487,6 +1488,25 @@ export default function ComptePage() {
                   <p className="text-xs sm:text-sm text-[#57534E] leading-relaxed font-light">
                     Votre compte est protégé par chiffrement SSL/TLS 256-bit et hébergé en conformité avec les réglementations européennes. Vos mots de passe ne sont jamais stockés en clair.
                   </p>
+
+                  {sessionExpiresAt && (
+                    <div className="p-3.5 rounded-xl bg-emerald-50/80 border border-emerald-200 text-emerald-900 text-xs sm:text-sm flex items-center gap-2.5">
+                      <Sparkles className="w-4 h-4 text-emerald-700 shrink-0" />
+                      <span>
+                        Session chiffrée active — Expire le{" "}
+                        <strong className="font-semibold">
+                          {new Date(sessionExpiresAt).toLocaleDateString("fr-FR", {
+                            weekday: "long",
+                            year: "numeric",
+                            month: "long",
+                            day: "numeric",
+                            hour: "2-digit",
+                            minute: "2-digit",
+                          })}
+                        </strong>
+                      </span>
+                    </div>
+                  )}
                 </div>
 
                 {/* Formulaire de Modification du Mot de passe */}

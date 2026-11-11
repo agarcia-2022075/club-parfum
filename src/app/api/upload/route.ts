@@ -54,11 +54,10 @@ export async function POST(request: NextRequest) {
       console.warn("Vérification automatique du bucket products:", err);
     }
 
-    // 4. Génération d'un nom de fichier unique et sécurisé
+    // 4. Génération du nom de fichier selon les spécifications
     const originalExt = file.name.split(".").pop()?.toLowerCase() || "jpg";
     const safeExt = ["jpeg", "jpg", "png", "webp", "avif"].includes(originalExt) ? originalExt : "jpg";
-    const safeName = `flacon-${Date.now()}-${Math.random().toString(36).substring(2, 8)}.${safeExt}`;
-    const storagePath = `catalog/${safeName}`;
+    const storagePath = `catalog/flacon-${Date.now()}.${safeExt}`;
 
     // 5. Conversion en Buffer et téléversement vers Supabase Storage
     const arrayBuffer = await file.arrayBuffer();
@@ -88,7 +87,6 @@ export async function POST(request: NextRequest) {
       {
         url: publicUrlData.publicUrl,
         storage: "supabase",
-        filename: safeName,
       },
       { status: 200 }
     );

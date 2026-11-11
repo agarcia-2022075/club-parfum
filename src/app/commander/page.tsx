@@ -25,7 +25,7 @@ import Image from "next/image";
 import Link from "next/link";
 
 export default function CheckoutPage() {
-  const { items, subtotal, totalCount, clearCart } = useCart();
+  const { items, subtotal, totalCount, clearCart, isHydrated } = useCart();
   const { user, updateProfile } = useAuth();
 
   const [selectedShipping, setSelectedShipping] = useState<ShippingMethod>(SHIPPING_METHODS[0]);
@@ -92,20 +92,16 @@ export default function CheckoutPage() {
     e.preventDefault();
     setErrorMessage(null);
 
-    // 1. Validation du numéro de téléphone français
+    // 1. Validation universelle et flexible du numéro de téléphone de contact
     const cleanedPhone = formData.phone.trim();
-    const frenchPhoneRegex = /^(?:(?:\+|00)33|0)[1-9](?:[\s.-]*\d{2}){4}$/;
-    if (!frenchPhoneRegex.test(cleanedPhone)) {
-      setErrorMessage(
-        "Veuillez renseigner un numéro de téléphone français valide (ex : 06 12 34 56 78 ou +33 6 12 34 56 78)."
-      );
+    if (!cleanedPhone || cleanedPhone.replace(/\s+/g, "").length < 4) {
+      setErrorMessage("Veuillez renseigner un numéro de téléphone de contact.");
       return;
     }
 
-    // 2. Validation du code postal français (5 chiffres) et de la ville
-    const postalCodeRegex = /^\d{5}$/;
-    if (!postalCodeRegex.test(formData.postalCode.trim())) {
-      setErrorMessage("Le code postal français doit comporter exactement 5 chiffres (ex : 75011, 06130).");
+    // 2. Validation flexible du code postal et de la ville
+    if (!formData.postalCode.trim()) {
+      setErrorMessage("Veuillez renseigner votre code postal.");
       return;
     }
     if (!formData.city.trim()) {
@@ -281,7 +277,20 @@ export default function CheckoutPage() {
     );
   }
 
-  if (items.length === 0) {
+  if (!isHydrated) {
+    return (
+      <div className="min-h-screen flex flex-col bg-[#FAFAF8] text-[#1C1917]">
+        <Header />
+        <main className="flex-1 max-w-md mx-auto px-4 py-24 text-center flex flex-col items-center justify-center space-y-4">
+          <Loader2 className="w-8 h-8 animate-spin text-[#A16207]" />
+          <p className="text-sm font-medium text-[#57534E]">Chargement de votre panier...</p>
+        </main>
+        <Footer />
+      </div>
+    );
+  }
+
+  if (isHydrated && items.length === 0 && !isSubmitted) {
     return (
       <div className="min-h-screen flex flex-col bg-[#FAFAF8] text-[#1C1917]">
         <Header />
@@ -438,13 +447,13 @@ export default function CheckoutPage() {
                 </div>
                 <div>
                   <label htmlFor="checkout-phone" className="block text-sm font-medium text-[#1C1917] mb-1.5">
-                    Téléphone français (suivi colis) *
+                    Téléphone de contact (suivi colis) *
                   </label>
                   <input
                     id="checkout-phone"
                     type="tel"
                     required
-                    placeholder="06 12 34 56 78"
+                    placeholder="+33 6 12 34 56 78 ou numéro international"
                     value={formData.phone}
                     onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
                     className="w-full px-4 py-3 rounded-xl border border-[#E7E2DA] focus:border-[#A16207] focus:outline-none text-sm text-[#1C1917]"
@@ -518,13 +527,11 @@ export default function CheckoutPage() {
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div>
                     <label htmlFor="checkout-postal-code" className="block text-sm font-medium text-[#1C1917] mb-1.5">
-                      Code Postal (5 chiffres) *
+                      Code Postal *
                     </label>
                     <input
                       id="checkout-postal-code"
                       type="text"
-                      pattern="[0-9]{5}"
-                      maxLength={5}
                       required
                       placeholder="75011"
                       value={formData.postalCode}

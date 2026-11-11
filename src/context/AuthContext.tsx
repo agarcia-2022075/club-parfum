@@ -4,12 +4,23 @@ import React, { createContext, useContext, useState, useEffect, useCallback } fr
 import { CustomerProfile } from "@/types/store";
 import { supabase, isSupabaseConfigured } from "@/lib/supabase";
 
+export const SESSION_DURATION_MS = 7 * 24 * 60 * 60 * 1000; // 7 jours
+export const STORAGE_KEY_SESSION = "club_parfum_auth_session_v1";
 const STORAGE_KEY_PROFILE = "club_parfum_customer_profile";
 const STORAGE_KEY_FAILED_ATTEMPTS = "club_parfum_failed_logins";
 const STORAGE_KEY_LOCKOUT_UNTIL = "club_parfum_lockout_until";
 
 const MAX_FAILED_ATTEMPTS = 5;
 const LOCKOUT_DURATION_SECONDS = 30;
+
+export interface StoredAuthSession {
+  token: string;
+  userId: string;
+  email: string;
+  issuedAt: number;
+  expiresAt: number; // Timestamp de expiración (7 días)
+  profile: CustomerProfile;
+}
 
 /**
  * Sanitisation stricte des entrées utilisateurs (Prévention OWASP XSS & Injections)
@@ -91,6 +102,7 @@ interface AuthContextType {
   user: CustomerProfile | null;
   isLoading: boolean;
   lockoutSecondsLeft: number;
+  sessionExpiresAt: number | null;
   login: (email: string, password: string) => Promise<{ success: boolean; error?: string }>;
   register: (data: RegisterData) => Promise<{
     success: boolean;
@@ -109,6 +121,79 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<CustomerProfile | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [lockoutSecondsLeft, setLockoutSecondsLeft] = useState(0);
+  const [sessionExpiresAt, setSessionExpiresAt] = useState<number | null>(null);
+
+  // Sauvegarde locale de la session avec token d'expiration de 7 jours
+  const saveLocalSession = useCallback(
+    (profile: CustomerProfile, expiresAt?: number, token?: string): StoredAuthSession => {
+      const finalExpiresAt = expiresAt || Date.now() + SESSION_DURATION_MS;
+      const finalToken = token || `cp_sess_${Date.now()}`;
+      const sessionObj: StoredAuthSession = {
+        token: finalToken,
+        userId: profile.id,
+        email: profile.email,
+        issuedAt: Date.now(),
+        expiresAt: finalExpiresAt,
+        profile,
+      };
+
+      try {
+        localStorage.setItem(STORAGE_KEY_SESSION, JSON.stringify(sessionObj));
+        localStorage.setItem(STORAGE_KEY_PROFILE, JSON.stringify(profile));
+      } catch {
+        // Ignorer si localStorage n'est pas disponible
+      }
+
+      setUser(profile);
+      setSessionExpiresAt(finalExpiresAt);
+      return sessionObj;
+    },
+    []
+  );
+
+  // Nettoyage complet de la session locale
+  const clearLocalSession = useCallback(() => {
+    setUser(null);
+    setSessionExpiresAt(null);
+    try {
+      localStorage.removeItem(STORAGE_KEY_SESSION);
+      localStorage.removeItem(STORAGE_KEY_PROFILE);
+    } catch {
+      // Ignorer
+    }
+  }, []);
+
+  // Vérification de la validité temporelle du token (7 jours)
+  const checkSessionValidity = useCallback((): StoredAuthSession | null => {
+    try {
+      const storedStr = localStorage.getItem(STORAGE_KEY_SESSION);
+      if (storedStr) {
+        const session: StoredAuthSession = JSON.parse(storedStr);
+        const now = Date.now();
+        if (session && session.expiresAt && now < session.expiresAt) {
+          setUser(session.profile);
+          setSessionExpiresAt(session.expiresAt);
+          return session;
+        } else if (session && session.expiresAt && now >= session.expiresAt) {
+          console.warn("Session expirée (dépassement des 7 jours). Déconnexion automatique.");
+          clearLocalSession();
+          if (isSupabaseConfigured && supabase) {
+            supabase.auth.signOut().catch(() => {});
+          }
+          return null;
+        }
+      }
+    } catch {
+      // Ignorer
+    }
+    return null;
+  }, [clearLocalSession]);
+
+  // Surveillance périodique de l'expiration toutes les 60 secondes
+  useEffect(() => {
+    const interval = setInterval(checkSessionValidity, 60000);
+    return () => clearInterval(interval);
+  }, [checkSessionValidity]);
 
   // --- Gestion du Rate-Limiting & Anti-Fuerza Bruta ---
   useEffect(() => {
@@ -163,7 +248,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   // --- Hydratation du profil client ---
   const hydrateProfile = useCallback(
-    async (supabaseUser: any, cachedProfile?: Partial<CustomerProfile> | null) => {
+    async (supabaseUser: any, cachedProfile?: Partial<CustomerProfile> | null): Promise<CustomerProfile | null> => {
       if (!supabaseUser) return null;
 
       const metadata = supabaseUser.user_metadata || {};
@@ -181,7 +266,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         favoriteFamily: metadata.favorite_family || cachedProfile?.favoriteFamily || "Orientale",
       };
 
-      // Si Supabase est actif, tenter de charger les données complètes de customer_profiles
+      // Si Supabase est actif, charger les données persistées de customer_profiles
       if (isSupabaseConfigured && supabase) {
         try {
           const { data, error } = await supabase
@@ -202,14 +287,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             baseProfile.favoriteFamily = data.favorite_family || baseProfile.favoriteFamily;
           }
         } catch (err) {
-          console.warn("Table customer_profiles non disponible, utilisation des métadonnées auth:", err);
+          console.warn("Table customer_profiles non disponible, repli métadonnées auth:", err);
         }
-      }
-
-      try {
-        localStorage.setItem(STORAGE_KEY_PROFILE, JSON.stringify(baseProfile));
-      } catch {
-        // Ignorer
       }
 
       return baseProfile;
@@ -224,21 +303,25 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     async function initAuth() {
       setIsLoading(true);
 
-      // 1. Lire le cache local préliminaire
-      let cached: CustomerProfile | null = null;
-      try {
-        const saved = localStorage.getItem(STORAGE_KEY_PROFILE);
-        if (saved) {
-          cached = JSON.parse(saved);
-          if (cached && isMounted) {
-            setUser(cached);
+      // 1. Vérifier d'abord la session persistée de 7 jours
+      const validSession = checkSessionValidity();
+      let cached: CustomerProfile | null = validSession ? validSession.profile : null;
+
+      if (!cached) {
+        try {
+          const saved = localStorage.getItem(STORAGE_KEY_PROFILE);
+          if (saved) {
+            cached = JSON.parse(saved);
+            if (cached && isMounted) {
+              setUser(cached);
+            }
           }
+        } catch {
+          // Ignorer
         }
-      } catch {
-        // Ignorer
       }
 
-      // 2. Si Supabase est configuré, synchroniser la session réelle
+      // 2. Si Supabase est configuré, synchroniser l'état auth
       if (isSupabaseConfigured && supabase) {
         try {
           const {
@@ -247,9 +330,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
           if (session?.user && isMounted) {
             const profile = await hydrateProfile(session.user, cached);
-            if (isMounted) setUser(profile);
+            if (profile && isMounted) {
+              saveLocalSession(profile);
+            }
           } else if (!cached && isMounted) {
-            setUser(null);
+            clearLocalSession();
           }
         } catch (err) {
           console.warn("Erreur synchronisation session Supabase Auth:", err);
@@ -261,7 +346,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     initAuth();
 
-    // 3. Écouteur de changement d'état d'authentification Supabase
+    // 3. Écouteur d'état Supabase Auth protégé contre les faux SIGNED_OUT
     if (isSupabaseConfigured && supabase) {
       const {
         data: { subscription },
@@ -270,17 +355,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
         if (event === "SIGNED_IN" && session?.user) {
           const profile = await hydrateProfile(session.user);
-          setUser(profile);
+          if (profile) {
+            saveLocalSession(profile);
+          }
         } else if (event === "SIGNED_OUT") {
-          setUser(null);
-          try {
-            localStorage.removeItem(STORAGE_KEY_PROFILE);
-          } catch {
-            // Ignorer
+          // Ne jamais purger la session locale si le token de 7 jours est encore valide
+          const activeValidSession = checkSessionValidity();
+          if (!activeValidSession) {
+            clearLocalSession();
           }
         } else if (event === "USER_UPDATED" && session?.user) {
           const profile = await hydrateProfile(session.user);
-          setUser(profile);
+          if (profile) {
+            saveLocalSession(profile);
+          }
         }
       });
 
@@ -293,7 +381,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return () => {
       isMounted = false;
     };
-  }, [hydrateProfile]);
+  }, [checkSessionValidity, clearLocalSession, hydrateProfile, saveLocalSession]);
 
   // --- MÉTHODE LOGIN ---
   const login = useCallback(
@@ -310,6 +398,30 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         return { success: false, error: "Veuillez renseigner votre adresse e-mail et votre mot de passe." };
       }
 
+      // 1. Appel préalable au endpoint de synchronisation /api/auth/sync pour débloquer/auto-confirmer
+      let syncedProfile: CustomerProfile | null = null;
+      let syncedExpiresAt: number | null = null;
+      let syncedToken: string | null = null;
+
+      try {
+        const syncRes = await fetch("/api/auth/sync", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ email, password, mode: "login" }),
+        });
+        if (syncRes.ok) {
+          const syncData = await syncRes.json();
+          if (syncData.profile) {
+            syncedProfile = syncData.profile;
+            syncedExpiresAt = syncData.expiresAt;
+            syncedToken = syncData.token;
+          }
+        }
+      } catch (e) {
+        console.warn("Avertissement synchronisation préalable /api/auth/sync:", e);
+      }
+
+      // 2. Connexion avec Supabase Auth
       if (isSupabaseConfigured && supabase) {
         try {
           const { data, error } = await supabase.auth.signInWithPassword({
@@ -333,8 +445,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
           if (data.user) {
             resetFailedAttempts();
-            const profile = await hydrateProfile(data.user);
-            setUser(profile);
+            const profile = syncedProfile || (await hydrateProfile(data.user));
+            if (profile) {
+              saveLocalSession(profile, syncedExpiresAt || undefined, syncedToken || undefined);
+            }
             return { success: true };
           }
         } catch (err: any) {
@@ -351,35 +465,40 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           const parsed = JSON.parse(savedProfileStr);
           if (parsed && parsed.email.toLowerCase() === email) {
             resetFailedAttempts();
-            setUser(parsed);
+            saveLocalSession(parsed, syncedExpiresAt || undefined, syncedToken || undefined);
             return { success: true };
           }
         }
 
         // Créer un profil de démonstration temporaire si l'utilisateur teste en local
         resetFailedAttempts();
-        const demoProfile: CustomerProfile = {
+        const demoProfile: CustomerProfile = syncedProfile || {
           id: `usr-${Date.now()}`,
           email,
-          firstName: "Membre",
-          lastName: "Club Parfum",
-          phone: "06 12 34 56 78",
-          address: "12 Rue de la Paix",
+          firstName: "Paolo",
+          lastName: "García Valdez",
+          phone: "56105001",
+          address: "",
           building: "",
           digicode: "",
-          postalCode: "75002",
+          postalCode: "75011",
           city: "Paris",
           favoriteFamily: "Orientale",
         };
-        setUser(demoProfile);
-        localStorage.setItem(STORAGE_KEY_PROFILE, JSON.stringify(demoProfile));
+        saveLocalSession(demoProfile, syncedExpiresAt || undefined, syncedToken || undefined);
         return { success: true };
       } catch (e) {
         registerFailedAttempt();
         return { success: false, error: "Impossible de valider vos identifiants." };
       }
     },
-    [hydrateProfile, lockoutSecondsLeft, registerFailedAttempt, resetFailedAttempts]
+    [
+      hydrateProfile,
+      lockoutSecondsLeft,
+      registerFailedAttempt,
+      resetFailedAttempts,
+      saveLocalSession,
+    ]
   );
 
   // --- MÉTHODE REGISTER ---
@@ -403,6 +522,48 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         return { success: false, error: pwdCheck.message };
       }
 
+      // 1. Création et auto-confirmation via /api/auth/sync
+      try {
+        const syncRes = await fetch("/api/auth/sync", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            email,
+            password: data.password,
+            firstName,
+            lastName,
+            phone,
+            mode: "register",
+          }),
+        });
+
+        const syncData = await syncRes.json();
+        if (!syncRes.ok) {
+          return {
+            success: false,
+            error: syncData.error || "Impossible d'enregistrer votre compte.",
+          };
+        }
+
+        if (syncData.profile) {
+          // Établir la session Supabase cliente si possible
+          if (isSupabaseConfigured && supabase) {
+            await supabase.auth
+              .signInWithPassword({
+                email,
+                password: data.password,
+              })
+              .catch((err) => console.warn("Connexion post-création Supabase:", err));
+          }
+
+          saveLocalSession(syncData.profile, syncData.expiresAt, syncData.token);
+          return { success: true, needsEmailConfirmation: false };
+        }
+      } catch (err: any) {
+        console.warn("Erreur inscription /api/auth/sync:", err);
+      }
+
+      // 2. Repli direct Supabase si l'API interne a échoué
       if (isSupabaseConfigured && supabase) {
         try {
           const { data: authData, error } = await supabase.auth.signUp({
@@ -443,34 +604,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
               favoriteFamily: "Orientale",
             };
 
-            // Insertion dans la table customer_profiles si elle existe
-            try {
-              await supabase.from("customer_profiles").upsert({
-                id: createdUser.id,
-                email,
-                first_name: firstName,
-                last_name: lastName,
-                phone,
-                postal_code: "75011",
-                city: "Paris",
-                favorite_family: "Orientale",
-              });
-            } catch (err) {
-              console.warn("Table customer_profiles non disponible lors de l'inscription:", err);
-            }
-
-            setUser(newProfile);
-            try {
-              localStorage.setItem(STORAGE_KEY_PROFILE, JSON.stringify(newProfile));
-            } catch {
-              // Ignorer
-            }
-
+            saveLocalSession(newProfile);
             const needsConfirmation = !authData.session;
             return { success: true, needsEmailConfirmation: needsConfirmation };
           }
         } catch (err: any) {
-          console.warn("Erreur inscription Supabase:", err);
+          console.warn("Erreur repli inscription Supabase:", err);
           return { success: false, error: "Erreur technique lors de l'enregistrement. Veuillez réessayer." };
         }
       }
@@ -489,16 +628,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         city: "Paris",
         favoriteFamily: "Orientale",
       };
-      setUser(localProfile);
-      try {
-        localStorage.setItem(STORAGE_KEY_PROFILE, JSON.stringify(localProfile));
-      } catch {
-        // Ignorer
-      }
+      saveLocalSession(localProfile);
 
       return { success: true, needsEmailConfirmation: false };
     },
-    []
+    [saveLocalSession]
   );
 
   // --- MÉTHODE UPDATE PROFILE ---
@@ -521,12 +655,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         favoriteFamily: fields.favoriteFamily !== undefined ? sanitizeInput(fields.favoriteFamily, 60) : user.favoriteFamily,
       };
 
-      setUser(updated);
-      try {
-        localStorage.setItem(STORAGE_KEY_PROFILE, JSON.stringify(updated));
-      } catch {
-        // Ignorer
-      }
+      saveLocalSession(updated, sessionExpiresAt || undefined);
 
       if (isSupabaseConfigured && supabase) {
         try {
@@ -567,7 +696,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
       return { success: true };
     },
-    [user]
+    [saveLocalSession, sessionExpiresAt, user]
   );
 
   // --- MÉTHODE UPDATE PASSWORD ---
@@ -627,12 +756,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   // --- MÉTHODE LOGOUT ---
   const logout = useCallback(async () => {
-    setUser(null);
-    try {
-      localStorage.removeItem(STORAGE_KEY_PROFILE);
-    } catch {
-      // Ignorer
-    }
+    clearLocalSession();
 
     if (isSupabaseConfigured && supabase) {
       try {
@@ -641,7 +765,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         console.warn("Erreur déconnexion Supabase Auth:", err);
       }
     }
-  }, []);
+  }, [clearLocalSession]);
 
   return (
     <AuthContext.Provider
@@ -649,6 +773,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         user,
         isLoading,
         lockoutSecondsLeft,
+        sessionExpiresAt,
         login,
         register,
         updateProfile,

@@ -495,7 +495,7 @@ export default function AdminDashboard() {
     if (!file) return;
 
     setIsUploadingImage(true);
-    setUploadStatusMsg(null);
+    setUploadStatusMsg("Téléversement vers Supabase Cloud...");
 
     // 1. Tentative de téléversement sécurisé vers l'API Supabase Storage
     try {
@@ -2206,8 +2206,18 @@ export default function AdminDashboard() {
 
                 {/* Message d'état du téléversement */}
                 {uploadStatusMsg && (
-                  <div className="p-2.5 rounded-lg bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs flex items-center gap-2">
-                    <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                  <div
+                    className={`p-2.5 rounded-lg border text-xs flex items-center gap-2 ${
+                      isUploadingImage
+                        ? "bg-amber-50 border-amber-200 text-amber-900"
+                        : "bg-emerald-50 border-emerald-200 text-emerald-800"
+                    }`}
+                  >
+                    {isUploadingImage ? (
+                      <Loader2 className="w-3.5 h-3.5 animate-spin text-[#A16207] shrink-0" />
+                    ) : (
+                      <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                    )}
                     <span>{uploadStatusMsg}</span>
                   </div>
                 )}

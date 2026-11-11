@@ -46,17 +46,17 @@ export function Header() {
 
       <header className="sticky top-0 z-50 bg-[#FAFAF8]/95 backdrop-blur-md border-b border-[#E7E2DA] transition-all">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex items-center justify-between min-h-[84px] py-3 gap-6">
+          <div className="flex items-center justify-between min-h-[84px] py-3 gap-2 sm:gap-6">
             {/* Logo / Maison de Parfum en une seule ligne */}
             <Link
               href="/"
-              className="group flex flex-col items-start shrink-0 cursor-pointer focus-visible:ring-2 focus-visible:ring-[#A16207] rounded-sm py-1"
+              className="group flex flex-col items-start min-w-0 shrink cursor-pointer focus-visible:ring-2 focus-visible:ring-[#A16207] rounded-sm py-1"
               onClick={() => setMobileMenuOpen(false)}
             >
-              <span className="font-serif text-xl sm:text-2xl lg:text-[26px] tracking-[0.22em] font-normal text-[#1C1917] uppercase whitespace-nowrap leading-none transition-colors group-hover:text-[#A16207]">
+              <span className="font-serif text-lg sm:text-2xl lg:text-[26px] tracking-[0.15em] sm:tracking-[0.22em] font-normal text-[#1C1917] uppercase whitespace-nowrap leading-none transition-colors group-hover:text-[#A16207]">
                 Club Parfum
               </span>
-              <span className="text-[9px] sm:text-[10px] uppercase tracking-[0.32em] text-[#A16207] font-medium mt-1.5 whitespace-nowrap leading-none font-sans">
+              <span className="text-[8px] sm:text-[10px] uppercase tracking-[0.18em] sm:tracking-[0.32em] text-[#A16207] font-medium mt-1 whitespace-nowrap leading-none font-sans">
                 Maison de Senteurs • Grasse
               </span>
             </Link>
@@ -180,23 +180,23 @@ export function Header() {
             </nav>
 
             {/* Actions Droite */}
-            <div className="flex items-center gap-1.5 sm:gap-2.5 shrink-0">
-              {/* Accès rapide recherche boutique */}
+            <div className="flex items-center gap-1 sm:gap-2.5 shrink-0">
+              {/* Accès rapide recherche boutique (masqué sur petit mobile, accessible dans le menu déroulant) */}
               <Link
                 href="/boutique"
-                className="p-2.5 rounded-full text-[#1C1917] hover:bg-[#F2EFE9] transition-colors cursor-pointer min-w-[40px] min-h-[40px] flex items-center justify-center"
+                className="hidden sm:flex p-2.5 rounded-full text-[#1C1917] hover:bg-[#F2EFE9] transition-colors cursor-pointer w-10 h-10 min-w-[40px] min-h-[40px] items-center justify-center"
                 aria-label="Rechercher une senteur ou un parfum"
                 title="Rechercher une création"
               >
                 <Search className="w-4.5 h-4.5 stroke-[1.5] text-[#44403C] hover:text-[#1C1917]" aria-hidden="true" />
               </Link>
 
-              {/* Conseil WhatsApp discret */}
+              {/* Conseil WhatsApp discret (masqué sur petit mobile, accessible dans le menu déroulant) */}
               <a
                 href="https://wa.me/33769914251?text=Bonjour%20Club%20Parfum,%20j'aimerais%20un%20conseil%20personnalis%C3%A9%20sur%20vos%20senteurs"
                 target="_blank"
                 rel="noopener noreferrer"
-                className="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-medium text-[#1C1917] bg-[#F2EFE9] hover:bg-[#E7E2DA] rounded-full transition-all duration-200 cursor-pointer border border-[#E7E2DA]"
+                className="hidden sm:inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-medium text-[#1C1917] bg-[#F2EFE9] hover:bg-[#E7E2DA] rounded-full transition-all duration-200 cursor-pointer border border-[#E7E2DA]"
                 title="Conseil personnalisé par WhatsApp"
               >
                 <MessageCircle className="w-3.5 h-3.5 text-[#A16207] shrink-0" aria-hidden="true" />
@@ -208,7 +208,7 @@ export function Header() {
               {/* Accès Mon Compte Client */}
               <Link
                 href="/compte"
-                className="relative p-2.5 rounded-full text-[#1C1917] hover:bg-[#F2EFE9] transition-colors cursor-pointer min-w-[40px] min-h-[40px] flex items-center justify-center gap-1.5"
+                className="relative p-2 rounded-full text-[#1C1917] hover:bg-[#F2EFE9] transition-colors cursor-pointer w-10 h-10 min-w-[40px] min-h-[40px] flex items-center justify-center gap-1.5"
                 aria-label={user ? `Mon Compte (${user.firstName})` : "Se connecter à mon compte"}
                 title={user ? `Mon Espace Client (${user.firstName})` : "Mon Compte / Connexion"}
               >
@@ -227,7 +227,7 @@ export function Header() {
               <button
                 type="button"
                 onClick={openCart}
-                className="relative p-2.5 rounded-full text-[#1C1917] hover:bg-[#F2EFE9] transition-colors cursor-pointer min-w-[44px] min-h-[44px] flex items-center justify-center"
+                className="relative p-2 rounded-full text-[#1C1917] hover:bg-[#F2EFE9] transition-colors cursor-pointer w-10 h-10 min-w-[40px] min-h-[40px] flex items-center justify-center"
                 aria-label={`Voir mon panier (${totalCount} articles)`}
               >
                 <ShoppingBag className="w-5 h-5 stroke-[1.5]" aria-hidden="true" />
@@ -242,7 +242,7 @@ export function Header() {
               <button
                 type="button"
                 onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-                className="lg:hidden p-2 rounded-xl text-[#1C1917] hover:bg-[#F2EFE9] transition cursor-pointer min-w-[44px] min-h-[44px] flex items-center justify-center"
+                className="lg:hidden p-2 rounded-xl text-[#1C1917] hover:bg-[#F2EFE9] transition cursor-pointer w-10 h-10 min-w-[40px] min-h-[40px] flex items-center justify-center"
                 aria-label={mobileMenuOpen ? "Fermer le menu" : "Ouvrir le menu"}
               >
                 {mobileMenuOpen ? (

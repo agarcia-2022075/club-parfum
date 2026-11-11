@@ -17,6 +17,7 @@ export interface CartItem {
 interface CartContextType {
   items: CartItem[];
   isOpen: boolean;
+  isHydrated: boolean;
   openCart: () => void;
   closeCart: () => void;
   toggleCart: () => void;
@@ -33,27 +34,34 @@ const CartContext = createContext<CartContextType | undefined>(undefined);
 export function CartProvider({ children }: { children: React.ReactNode }) {
   const [items, setItems] = useState<CartItem[]>([]);
   const [isOpen, setIsOpen] = useState(false);
+  const [isHydrated, setIsHydrated] = useState(false);
 
   // Charger depuis le localStorage au premier rendu
   useEffect(() => {
     try {
       const saved = localStorage.getItem("club_parfum_cart");
       if (saved) {
-        setItems(JSON.parse(saved));
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed)) {
+          setItems(parsed);
+        }
       }
     } catch {
       // Ignorer si localStorage n'est pas disponible
+    } finally {
+      setIsHydrated(true);
     }
   }, []);
 
-  // Sauvegarder dans le localStorage à chaque modification
+  // Sauvegarder dans le localStorage à chaque modification (protégé contre l'écrasement prématuré)
   useEffect(() => {
+    if (!isHydrated) return;
     try {
       localStorage.setItem("club_parfum_cart", JSON.stringify(items));
     } catch {
       // Ignorer
     }
-  }, [items]);
+  }, [items, isHydrated]);
 
   const openCart = () => setIsOpen(true);
   const closeCart = () => setIsOpen(false);
@@ -104,7 +112,14 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
     );
   };
 
-  const clearCart = () => setItems([]);
+  const clearCart = () => {
+    setItems([]);
+    try {
+      localStorage.removeItem("club_parfum_cart");
+    } catch {
+      // Ignorer
+    }
+  };
 
   const totalCount = items.reduce((acc, it) => acc + it.quantity, 0);
   const subtotal = items.reduce((acc, it) => acc + it.price * it.quantity, 0);
@@ -114,6 +129,7 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
       value={{
         items,
         isOpen,
+        isHydrated,
         openCart,
         closeCart,
         toggleCart,
