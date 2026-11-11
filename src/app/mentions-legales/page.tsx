@@ -51,17 +51,17 @@ export default function MentionsLegalesPage() {
             <ul className="space-y-2.5 pl-4 border-l-2 border-[#A16207]/40 text-[#1C1917]">
               <li><strong className="font-medium">Statut :</strong> Entrepreneur Individuel (EI) sous le régime de la Micro-entreprise</li>
               <li><strong className="font-medium">Nom commercial :</strong> Club Parfum</li>
-              <li><strong className="font-medium">Exploitant / Responsable légal :</strong> Direction Générale Club Parfum — Artisan Parfumeur (EI)</li>
-              <li><strong className="font-medium">Adresse du siège social / Atelier :</strong> Pays de Grasse — 06130 Grasse, Alpes-Maritimes, France</li>
-              <li><strong className="font-medium">Immatriculation :</strong> Répertoire National des Entreprises (RNE) — Greffe de Grasse</li>
+              <li><strong className="font-medium">Exploitant / Responsable légal :</strong> [Nom et Prénom de l&apos;exploitant à renseigner] — Artisan Parfumeur</li>
+              <li><strong className="font-medium">Adresse du siège social / Atelier :</strong> [Adresse complète de l&apos;atelier à renseigner, Grasse, France]</li>
+              <li><strong className="font-medium">Numéro SIRET :</strong> [Numéro SIRET à 14 chiffres en cours d&apos;immatriculation / RNE]</li>
               <li><strong className="font-medium">TVA :</strong> <span className="text-[#A16207] font-semibold">TVA non applicable, art. 293 B du CGI</span> (franchise en base de TVA)</li>
-              <li><strong className="font-medium">Directeur de la publication :</strong> Direction de la Maison Club Parfum</li>
+              <li><strong className="font-medium">Directeur de la publication :</strong> [Nom de l&apos;exploitant à renseigner]</li>
             </ul>
 
             <div className="pt-2 flex flex-col sm:flex-row gap-6 text-sm">
               <span className="flex items-center gap-2 text-[#1C1917]">
                 <Mail className="w-4 h-4 text-[#A16207]" />
-                <a href="mailto:contact@clubparfum.fr" className="hover:text-[#A16207] transition">contact@clubparfum.fr</a>
+                <a href="mailto:contact@clubparfum.fr" className="hover:text-[#A16207] transition">contact@clubparfum.fr (Boîte de messagerie en cours de déploiement)</a>
               </span>
               <span className="flex items-center gap-2 text-[#1C1917]">
                 <Phone className="w-4 h-4 text-[#A16207]" />

@@ -416,6 +416,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             syncedExpiresAt = syncData.expiresAt;
             syncedToken = syncData.token;
           }
+        } else if (syncRes.status === 401) {
+          registerFailedAttempt();
+          return { success: false, error: "Identifiants invalides." };
         }
       } catch (e) {
         console.warn("Avertissement synchronisation préalable /api/auth/sync:", e);

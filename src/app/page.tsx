@@ -42,7 +42,7 @@ export default function Home() {
                 {/* Badge éditorial authentique */}
                 <div className="inline-flex items-center gap-2 px-3.5 py-1.5 bg-white border border-[#E7E2DA] text-xs font-semibold tracking-[0.22em] text-[#A16207] uppercase">
                   <Sparkles className="w-3.5 h-3.5 text-[#A16207]" aria-hidden="true" />
-                  <span>Artisan Parfumeur • Essences de Grasse • Depuis 1999</span>
+                  <span>Artisan Parfumeur • Maison de Senteurs • Essences Nobles de Grasse</span>
                 </div>
 
                 <div className="space-y-3">
@@ -177,14 +177,14 @@ export default function Home() {
               {/* Pilier 4 */}
               <div className="flex items-start gap-3.5 p-3">
                 <div className="w-11 h-11 rounded-full bg-[#FAF8F5] border border-[#E7E2DA] flex items-center justify-center text-[#A16207] shrink-0">
-                  <CreditCard className="w-5 h-5 stroke-[1.5]" />
+                  <ShieldCheck className="w-5 h-5 stroke-[1.5]" />
                 </div>
                 <div>
                   <h3 className="text-sm sm:text-[15px] font-semibold text-[#1C1917]">
-                    Paiement 100% Sécurisé
+                    Commandes Garanties
                   </h3>
                   <p className="text-xs sm:text-sm text-[#57534E] mt-0.5 font-light">
-                    CB, Apple Pay, PayPal & Wero
+                    Préparation artisanale soignée &amp; emballage haute protection
                   </p>
                 </div>
               </div>

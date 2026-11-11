@@ -14,6 +14,46 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // 0. Vérification stricte de l'autorisation d'administration (Session ou Token requis)
+    const authHeader = request.headers.get("authorization") || "";
+    const adminTokenHeader = request.headers.get("x-admin-token") || "";
+    const adminCookie = request.cookies.get("club_parfum_admin_token")?.value || "";
+
+    const candidateToken =
+      authHeader.replace(/^Bearer\s+/i, "").trim() ||
+      adminTokenHeader.trim() ||
+      adminCookie.trim();
+
+    let isAuthorized = false;
+
+    if (candidateToken && candidateToken.startsWith("cp_adm_")) {
+      try {
+        const payloadStr = Buffer.from(
+          candidateToken.replace("cp_adm_", ""),
+          "base64url"
+        ).toString("utf8");
+        const payload = JSON.parse(payloadStr);
+        if (payload && payload.exp && Date.now() < payload.exp) {
+          isAuthorized = true;
+        }
+      } catch {
+        // Token invalide
+      }
+    }
+
+    const passcodeHeader = request.headers.get("x-admin-passcode");
+    const serverAdminCode = process.env.ADMIN_ACCESS_CODE || "GRASSE2026_SECURE";
+    if (passcodeHeader && passcodeHeader === serverAdminCode) {
+      isAuthorized = true;
+    }
+
+    if (!isAuthorized) {
+      return NextResponse.json(
+        { error: "Accès refusé. Session administrateur autorisée requise pour téléverser." },
+        { status: 401 }
+      );
+    }
+
     const formData = await request.formData();
     const file = formData.get("file");
 

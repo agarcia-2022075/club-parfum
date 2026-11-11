@@ -154,25 +154,32 @@ DROP POLICY IF EXISTS "Mise à jour profil personnel" ON customer_profiles;
 CREATE POLICY "Mise à jour profil personnel" ON customer_profiles
   FOR UPDATE USING (auth.uid() = id) WITH CHECK (auth.uid() = id);
 
--- 8.3 Création de commande publique validée (intégrité des coordonnées clients et montants positifs)
-CREATE POLICY "Création de commande publique validée" ON orders
-  FOR INSERT
-  WITH CHECK (
+-- 8.3 Checkout Public: Le visiteur peut UNIQUEMENT insérer des commandes valides (INSERT)
+-- SELECT bloqué pour les utilisateurs anonymes (prévention de fuite de données RGPD)
+DROP POLICY IF EXISTS "Gestion admin des commandes" ON orders;
+DROP POLICY IF EXISTS "Gestion admin des produits" ON products;
+DROP POLICY IF EXISTS "Gestion admin des catégories" ON categories;
+DROP POLICY IF EXISTS "Gestion admin des variantes" ON product_variants;
+DROP POLICY IF EXISTS "Gestion admin des familles olfactives" ON olfactory_families;
+DROP POLICY IF EXISTS "Création de commande publique" ON orders;
+DROP POLICY IF EXISTS "Création de commande publique validée" ON orders;
+
+CREATE POLICY "Insertion commande client anonyme" ON orders
+  FOR INSERT WITH CHECK (
     length(order_number) > 0 AND
-    length(customer_first_name) > 0 AND
-    length(customer_last_name) > 0 AND
+    length(customer_name) > 0 AND
     length(customer_email) > 0 AND
-    length(customer_phone) > 0 AND
-    subtotal >= 0 AND
     total >= 0
   );
 
--- 8.3 Gestion du catalogue et des commandes pour l'administration
-CREATE POLICY "Gestion admin des catégories" ON categories FOR ALL USING (true);
-CREATE POLICY "Gestion admin des familles olfactives" ON olfactory_families FOR ALL USING (true);
-CREATE POLICY "Gestion admin des produits" ON products FOR ALL USING (true);
-CREATE POLICY "Gestion admin des commandes" ON orders FOR ALL USING (true);
-CREATE POLICY "Gestion admin des variantes" ON product_variants FOR ALL USING (true);
+-- 8.4 Consultation de commande propre: Si authentifié, le client ne voit que ses propres commandes
+CREATE POLICY "Lecture commandes propres client" ON orders
+  FOR SELECT USING (auth.uid() = user_id);
+
+-- Note de sécurité Architecture:
+-- Le catalogue est en lecture publique (SELECT) pour tous.
+-- Les opérations administratives d'écriture (INSERT / UPDATE / DELETE) sur les commandes et le catalogue
+-- sont réservées exclusivement au rôle service_role via getSupabaseAdmin() dans les API Routes protégées.
 
 -- ==============================================================================
 -- 9. INSERTION DES DONNÉES INITIALES (SEED DE DÉMO ARTISANALE DE GRASSE)

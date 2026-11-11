@@ -71,6 +71,38 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    // 2.1 En mode "login" : VALIDATION OBLIGATOIRE DU MOT DE PASSE (Bypass formellement interdit)
+    if (mode === "login") {
+      if (!password) {
+        return NextResponse.json(
+          { error: "Le mot de passe est obligatoire pour vous connecter." },
+          { status: 400 }
+        );
+      }
+
+      if (!existingUser) {
+        return NextResponse.json(
+          { error: "Identifiants invalides." },
+          { status: 401 }
+        );
+      }
+
+      // Valider rigoureusement les identifiants avec Supabase Auth
+      const { data: authData, error: authError } = await supabaseAdmin.auth.signInWithPassword({
+        email: normalizedEmail,
+        password,
+      });
+
+      if (authError || !authData.user) {
+        return NextResponse.json(
+          { error: "Identifiants invalides." },
+          { status: 401 }
+        );
+      }
+
+      existingUser = authData.user;
+    }
+
     // 3. Si mode === "register" et que l'utilisateur n'existe pas encore, le créer directement auto-confirmé
     if (mode === "register" && !existingUser) {
       const { data: created, error: createError } = await supabaseAdmin.auth.admin.createUser({

@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ShieldCheck, Truck, Sparkles, MessageCircle, Lock } from "lucide-react";
+import { ShieldCheck, Truck, Sparkles, MessageCircle } from "lucide-react";
 
 export function Footer() {
   return (
@@ -46,10 +46,10 @@ export function Footer() {
                 <ShieldCheck className="w-5 h-5" aria-hidden="true" />
               </div>
               <h3 className="font-serif text-xl sm:text-2xl text-[#1C1917] font-medium leading-snug">
-                Paiement Sécurisé & Retours
+                Commandes Sécurisées &amp; Retours
               </h3>
               <p className="text-sm sm:text-[15px] text-[#44403C] leading-relaxed max-w-sm font-light">
-                Paiement chiffré SSL 256-bit (Cartes Bancaires CB, Apple Pay, PayPal, Wero). Droit de rétractation de 14 jours pour tout flacon scellé.
+                Transactions chiffrées SSL 256-bit et protection des données. Droit de rétractation de 14 jours pour tout flacon scellé.
               </p>
             </div>
           </div>
@@ -238,27 +238,15 @@ export function Footer() {
             </div>
           </div>
 
-          {/* Bandeau de Paiements et Transporteurs */}
+          {/* Bandeau d'Expéditions et Transporteurs */}
           <div className="py-6 border-y border-[#44403C]/60 flex flex-wrap items-center justify-between gap-4 text-xs sm:text-sm">
             <div className="flex flex-wrap items-center gap-3">
               <span className="text-xs uppercase tracking-wider text-[#A8A29E] font-medium">
-                Paiements 100% sécurisés :
+                Garantie Atelier :
               </span>
               <div className="flex flex-wrap items-center gap-2">
-                <span className="px-3 py-1 rounded-md bg-[#292524] border border-[#44403C] text-xs font-semibold text-[#FAFAF8]">
-                  CB (Cartes Bancaires)
-                </span>
-                <span className="px-3 py-1 rounded-md bg-[#292524] border border-[#44403C] text-xs font-semibold text-[#FAFAF8]">
-                  Visa
-                </span>
-                <span className="px-3 py-1 rounded-md bg-[#292524] border border-[#44403C] text-xs font-semibold text-[#FAFAF8]">
-                  Mastercard
-                </span>
-                <span className="px-3 py-1 rounded-md bg-[#292524] border border-[#44403C] text-xs font-semibold text-[#FAFAF8]">
-                  Apple Pay
-                </span>
-                <span className="px-3 py-1 rounded-md bg-[#292524] border border-[#44403C] text-xs font-semibold text-[#FAFAF8]">
-                  PayPal
+                <span className="text-xs text-[#FAFAF8] font-medium">
+                  Maison Artisanale • Expéditions soignées vers toute la France • Chiffrement SSL 256-bit
                 </span>
                 <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-md bg-emerald-950/60 border border-emerald-800/60 text-xs font-medium text-emerald-400">
                   <ShieldCheck className="w-3.5 h-3.5" />
@@ -282,22 +270,14 @@ export function Footer() {
             </div>
           </div>
 
-          {/* Créditos & Acceso Discreto Admin */}
+          {/* Crédits */}
           <div className="pt-8 flex flex-col sm:flex-row justify-between items-center text-xs sm:text-sm text-[#A8A29E] gap-4">
             <p>© 2026 Club Parfum • Maison de Senteurs. Tous droits réservés.</p>
 
             <div className="flex items-center gap-6">
-              <p className="text-[#E7E2DA] hidden md:block">
-                Haute Parfumerie & Bougies Végétales de Grasse.
+              <p className="text-[#E7E2DA]">
+                Haute Parfumerie &amp; Bougies Végétales de Grasse.
               </p>
-              <Link
-                href="/admin"
-                className="inline-flex items-center gap-1.5 text-xs text-[#D6D3D1] hover:text-[#FAFAF8] transition-colors"
-                title="Espace réservé à la gestion des commandes"
-              >
-                <Lock className="w-3.5 h-3.5 text-[#D4A359]" />
-                <span>Accès Artisane (Gestion)</span>
-              </Link>
             </div>
           </div>
         </div>

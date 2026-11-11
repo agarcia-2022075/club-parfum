@@ -93,7 +93,7 @@ export default function CGVPage() {
               <li>Renseignement des coordonnées du destinataire en France (nom, prénom, e-mail, téléphone, digicode/bâtiment).</li>
               <li>Choix du mode d'expédition (Point Relais Mondial Relay ou Colissimo Domicile).</li>
               <li>Acceptation expresse des présentes CGV via la case à cocher.</li>
-              <li>Règlement sécurisé par carte bancaire ou PayPal.</li>
+              <li>Validation et confirmation de la commande en ligne.</li>
             </ol>
             <p>
               Une confirmation électronique récapitulative est adressée sans délai à l'adresse e-mail renseignée par le Client.
@@ -106,10 +106,10 @@ export default function CGVPage() {
               Article 5 • Paiement et Sécurité des Transactions
             </h2>
             <p>
-              Le paiement est exigible immédiatement à la commande. Le règlement s'effectue en ligne par carte bancaire (Carte Bleue, Visa, Mastercard, American Express, Apple Pay, Google Pay) via la plateforme certifiée <strong>Stripe</strong> ou par <strong>PayPal</strong> et le réseau bancaire européen <strong>Wero</strong>.
+              Le paiement ou la confirmation de commande s&apos;effectue en ligne selon les modalités techniques proposées sur le site. Les transactions font l&apos;objet d&apos;une validation directe et les solutions de règlement télématique sont opérées dans le respect des normes bancaires françaises et européennes (chiffrement SSL/TLS 256-bit).
             </p>
             <p>
-              Aucune donnée bancaire n'est stockée ni ne transite en clair sur les serveurs de Club Parfum. Le paiement contre remboursement (paiement à la livraison) n'est pas accepté.
+              Aucune donnée bancaire n&apos;est stockée ni ne transite en clair sur les serveurs de Club Parfum. Le paiement contre remboursement (paiement à la livraison) n&apos;est pas accepté.
             </p>
           </section>
 

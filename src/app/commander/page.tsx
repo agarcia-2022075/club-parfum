@@ -66,15 +66,9 @@ export default function CheckoutPage() {
     }
   }, [user]);
 
-  const activePostal = formData.postalCode.trim() || "75011";
-  const activeCity = formData.city.trim() || "Paris";
-  const dynamicRelayOptions = [
-    `Presse & Tabac de la Fontaine - ${activePostal} ${activeCity} (0.3 km - Conseillé)`,
-    `Épicerie Fine & Terroir - ${activePostal} ${activeCity} (0.6 km)`,
-    `Locker Mondial Relay 24/7 - ${activePostal} ${activeCity} (0.9 km)`,
-  ];
-
-  const currentRelay = formData.relayChoice || dynamicRelayOptions[0];
+  const currentRelay =
+    formData.relayChoice.trim() ||
+    `Point Relais à proximité (${formData.postalCode.trim() || "France"})`;
 
   const isFreeShipping = subtotal >= FREE_SHIPPING_THRESHOLD;
 
@@ -368,8 +362,11 @@ export default function CheckoutPage() {
                   <span className="w-8 h-8 rounded-full bg-[#A16207]/10 text-[#A16207] flex items-center justify-center shrink-0">
                     <User className="w-4 h-4" />
                   </span>
-                  <span>
-                    ✨ Connecté(e) en tant que <strong>{user.firstName} {user.lastName}</strong> — Vos coordonnées et carnet d&apos;adresses ont été pré-remplis automatiquement.
+                  <span className="flex items-center gap-1.5">
+                    <Sparkles className="w-4 h-4 text-[#A16207] shrink-0 inline" />
+                    <span>
+                      Connecté(e) en tant que <strong>{user.firstName} {user.lastName}</strong> — Vos coordonnées et carnet d&apos;adresses ont été pré-remplis automatiquement.
+                    </span>
                   </span>
                 </div>
                 <Link
@@ -556,26 +553,19 @@ export default function CheckoutPage() {
                 {/* Détails spécifiques selon l'option */}
                 {selectedShipping.requires_relay_point ? (
                   <div className="pt-2 space-y-2">
-                    <div className="flex items-center justify-between">
-                      <label htmlFor="checkout-relay" className="block text-sm font-medium text-[#1C1917]">
-                        Point Relais disponible autour de {activePostal} {activeCity} *
-                      </label>
-                      <span className="text-xs text-[#A16207]">3 points trouvés</span>
-                    </div>
-                    <select
+                    <label htmlFor="checkout-relay" className="block text-sm font-medium text-[#1C1917]">
+                      Nom ou adresse du commerce / Locker souhaité (Optionnel)
+                    </label>
+                    <input
                       id="checkout-relay"
-                      value={currentRelay}
+                      type="text"
+                      placeholder="Ex : Locker Mondial Relay 24/7 Gare, Presse & Tabac du Centre..."
+                      value={formData.relayChoice}
                       onChange={(e) => setFormData({ ...formData, relayChoice: e.target.value })}
                       className="w-full px-4 py-3 rounded-xl border border-[#E7E2DA] focus:border-[#A16207] focus:outline-none text-sm bg-white text-[#1C1917]"
-                    >
-                      {dynamicRelayOptions.map((opt, i) => (
-                        <option key={i} value={opt}>
-                          {opt}
-                        </option>
-                      ))}
-                    </select>
+                    />
                     <p className="text-xs text-[#57534E]">
-                      Votre colis y sera mis à disposition pendant 8 jours ouvrés dès sa réception.
+                      Un conseiller vérifiera le Point Relais le plus proche de votre code postal avant expédition.
                     </p>
                   </div>
                 ) : (
@@ -698,7 +688,7 @@ export default function CheckoutPage() {
                 </label>
               </div>
 
-              {/* Bouton Payer avec état de chargement */}
+              {/* Bouton de confirmation avec simulation de commande */}
               <button
                 type="submit"
                 disabled={isSubmitting}
@@ -707,19 +697,19 @@ export default function CheckoutPage() {
                 {isSubmitting ? (
                   <>
                     <Loader2 className="w-4 h-4 animate-spin" />
-                    <span>Validation de votre commande...</span>
+                    <span>Enregistrement de la commande...</span>
                   </>
                 ) : (
                   <>
-                    <CreditCard className="w-4 h-4" />
-                    <span>Régler la commande • {formatPrice(totalOrder)}</span>
+                    <CheckCircle2 className="w-4 h-4 text-[#A16207]" />
+                    <span>Confirmer la commande (Simulation de paiement) • {formatPrice(totalOrder)}</span>
                   </>
                 )}
               </button>
 
               <div className="text-center text-xs text-[#57534E] space-y-1">
-                <p>Cartes Bancaires (CB), Apple Pay, PayPal & Wero</p>
-                <p className="text-[11px] text-[#A16207]">Garantie satisfait ou remboursé 14 jours</p>
+                <p>Mode Démo : La commande sera enregistrée sans débit bancaire immédiat. Vos informations restent strictement confidentielles.</p>
+                <p className="text-[11px] text-[#A16207]">Garantie artisanale &amp; suivi de colis en direct</p>
               </div>
             </section>
           </div>

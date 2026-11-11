@@ -21,6 +21,11 @@ export const CATEGORIES: Category[] = [
   },
 ];
 
+/**
+ * FORMULATIONS ARTISANALES DE RÉFÉRENCE INITIALE — CLUB PARFUM
+ * Catalogue étalon de haute parfumerie et cires végétales nobles de Grasse.
+ * Atelier & Service Client : +33 7 69 91 42 51 • contact@clubparfum.fr
+ */
 export const MOCK_PRODUCTS: Product[] = [
   {
     id: "prod-1",
@@ -278,7 +283,7 @@ export const FAQ_ITEMS: FaqItem[] = [
   {
     id: "faq-1",
     question: "Comment choisir la senteur idéale à distance sans pouvoir la sentir ?",
-    answer: "Chaque fiche de notre Maison détaille fidèlement la Pyramide Olfactive en 3 temps (Notes de Tête, Cœur et Fond) ainsi que la Famille Olfactive (Fleurie, Boisée, Gourmande, Orientale ou Poudrée). Si vous hésitez, commencez par notre format découverte de 10 ml en Eau de Parfum à 9,90 € pour tester l'alchimie sur votre peau, ou écrivez-nous directement sur WhatsApp pour un conseil sur-mesure selon vos préférences habituelles.",
+    answer: "Chaque fiche de notre Maison détaille fidèlement la Pyramide Olfactive en 3 temps (Notes de Tête, Cœur et Fond) ainsi que la Famille Olfactive (Fleurie, Boisée, Gourmande, Orientale ou Poudrée). Si vous hésitez, commencez par notre format découverte de 10 ml en Eau de Parfum à 9,90 € pour tester l'alchimie sur votre peau, ou écrivez-nous directement sur WhatsApp (+33 7 69 91 42 51) pour un conseil sur-mesure selon vos préférences habituelles.",
     category: "Conseil",
   },
   {
