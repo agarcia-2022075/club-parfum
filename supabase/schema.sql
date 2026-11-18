@@ -345,6 +345,6 @@ DROP POLICY IF EXISTS "Lecture publique des photos de produits" ON storage.objec
 CREATE POLICY "Lecture publique des photos de produits" ON storage.objects
   FOR SELECT USING (bucket_id = 'products');
 
+-- Sécurité Storage : le bucket 'products' n'accepte aucune écriture publique directe.
+-- Tous les téléversements passent exclusivement par /api/upload via service_role (qui contourne RLS côté serveur).
 DROP POLICY IF EXISTS "Téléversement admin des photos de produits" ON storage.objects;
-CREATE POLICY "Téléversement admin des photos de produits" ON storage.objects
-  FOR INSERT WITH CHECK (bucket_id = 'products');

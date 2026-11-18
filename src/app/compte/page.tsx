@@ -1,15 +1,14 @@
 "use client";
 
-import { useState, useEffect, useTransition } from "react";
+import { useState, useEffect } from "react";
 import Link from "next/link";
 import { Header } from "@/components/Header";
 import { Footer } from "@/components/Footer";
 import { useAuth, evaluatePasswordStrength, validatePassword } from "@/context/AuthContext";
 import { supabase, isSupabaseConfigured } from "@/lib/supabase";
-import { CustomerOrder } from "@/types/store";
+import { CustomerOrder, OrderItem } from "@/types/store";
 import { formatPrice } from "@/lib/utils";
 import {
-  User,
   Package,
   MapPin,
   ShieldCheck,
@@ -17,7 +16,6 @@ import {
   EyeOff,
   Lock,
   Mail,
-  Phone,
   ArrowRight,
   Check,
   CheckCircle2,
@@ -25,14 +23,68 @@ import {
   Loader2,
   LogOut,
   Copy,
-  ExternalLink,
   MessageCircle,
   Search,
   Sparkles,
-  ChevronRight,
   Truck,
-  Heart,
 } from "lucide-react";
+
+interface TrackedGuestOrder {
+  id: string;
+  order_number: string;
+  date: string;
+  customer_first_name?: string;
+  status: string;
+  tracking?: string;
+  shipping_method: string;
+  shipping_cost: number;
+  subtotal: number;
+  total: number;
+  items: OrderItem[];
+  postal_code?: string;
+  city?: string;
+  relay_point?: string | null;
+  created_at?: string;
+}
+
+interface AddressFormState {
+  firstName: string;
+  lastName: string;
+  phone: string;
+  address: string;
+  building: string;
+  digicode: string;
+  postalCode: string;
+  city: string;
+  favoriteFamily: string;
+}
+
+interface DbCustomerOrderRow {
+  id: string;
+  order_number: string;
+  date: string;
+  customer_first_name: string;
+  customer_last_name: string;
+  customer_name: string;
+  customer_email: string;
+  customer_phone: string;
+  shipping_method_id?: string | null;
+  shipping_method: string;
+  shipping_cost: number | string;
+  relay_point?: string | null;
+  address?: string | null;
+  building?: string | null;
+  digicode?: string | null;
+  postal_code?: string | null;
+  city?: string | null;
+  subtotal: number | string;
+  total: number | string;
+  status: string;
+  tracking?: string | null;
+  items?: OrderItem[] | null;
+  created_at?: string | null;
+  user_id?: string | null;
+}
 
 export default function ComptePage() {
   const {
@@ -81,19 +133,35 @@ export default function ComptePage() {
   const [isForgotLoading, setIsForgotLoading] = useState(false);
 
   // --- Carnet d'adresse client (Onglet 2) ---
-  const [addressData, setAddressData] = useState({
-    firstName: "",
-    lastName: "",
-    phone: "",
-    address: "",
-    building: "",
-    digicode: "",
-    postalCode: "75011",
-    city: "Paris",
-    favoriteFamily: "Orientale",
-  });
+  const [addressOverrides, setAddressOverrides] = useState<{
+    userId: string;
+    data: AddressFormState;
+  } | null>(null);
   const [addressSuccess, setAddressSuccess] = useState<string | null>(null);
   const [isSavingAddress, setIsSavingAddress] = useState(false);
+
+  const addressData: AddressFormState =
+    user && addressOverrides && addressOverrides.userId === user.id
+      ? addressOverrides.data
+      : {
+          firstName: user?.firstName || "",
+          lastName: user?.lastName || "",
+          phone: user?.phone || "",
+          address: user?.address || "",
+          building: user?.building || "",
+          digicode: user?.digicode || "",
+          postalCode: user?.postalCode || "",
+          city: user?.city || "",
+          favoriteFamily: user?.favoriteFamily || "Orientale",
+        };
+
+  const updateAddressField = (patch: Partial<AddressFormState>) => {
+    if (!user) return;
+    setAddressOverrides({
+      userId: user.id,
+      data: { ...addressData, ...patch },
+    });
+  };
 
   // --- Sécurité & Changement Mot de passe (Onglet 3) ---
   const [newPassword, setNewPassword] = useState("");
@@ -104,114 +172,111 @@ export default function ComptePage() {
   const [isChangingPassword, setIsChangingPassword] = useState(false);
 
   // --- Commandes du client (Onglet 1) ---
-  const [customerOrders, setCustomerOrders] = useState<CustomerOrder[]>([]);
-  const [isLoadingOrders, setIsLoadingOrders] = useState(false);
+  const [ordersState, setOrdersState] = useState<{
+    userId: string;
+    items: CustomerOrder[];
+  } | null>(null);
   const [copiedOrderId, setCopiedOrderId] = useState<string | null>(null);
 
   // --- Suivi de commande sans compte (Guest Tracker) ---
   const [guestOrderNum, setGuestOrderNum] = useState("");
   const [guestEmail, setGuestEmail] = useState("");
-  const [guestOrderResult, setGuestOrderResult] = useState<CustomerOrder | null>(null);
+  const [guestOrderResult, setGuestOrderResult] = useState<TrackedGuestOrder | null>(null);
   const [guestOrderError, setGuestOrderError] = useState<string | null>(null);
   const [isSearchingGuestOrder, setIsSearchingGuestOrder] = useState(false);
 
-  // Synchroniser les champs d'adresse lorsque l'utilisateur est chargé
-  useEffect(() => {
-    if (user) {
-      setAddressData({
-        firstName: user.firstName || "",
-        lastName: user.lastName || "",
-        phone: user.phone || "",
-        address: user.address || "",
-        building: user.building || "",
-        digicode: user.digicode || "",
-        postalCode: user.postalCode || "75011",
-        city: user.city || "Paris",
-        favoriteFamily: user.favoriteFamily || "Orientale",
-      });
-    }
-  }, [user]);
+  const customerOrders =
+    user && ordersState && ordersState.userId === user.id ? ordersState.items : [];
+  const isLoadingOrders =
+    Boolean(user) &&
+    isSupabaseConfigured &&
+    Boolean(supabase) &&
+    ordersState?.userId !== user?.id;
 
   // Charger l'historique des commandes du client connecté
   useEffect(() => {
-    if (!user) {
-      setCustomerOrders([]);
+    if (!user || !isSupabaseConfigured || !supabase) {
       return;
     }
 
+    const currentUser = user;
+    const client = supabase;
     let isMounted = true;
+
     async function fetchOrders() {
-      setIsLoadingOrders(true);
-      if (isSupabaseConfigured && supabase) {
-        try {
-          const userEmail = user?.email.trim().toLowerCase();
-          const isValidUuid = Boolean(
-            user?.id &&
-            /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(user.id)
-          );
+      try {
+        const userEmail = currentUser.email.trim().toLowerCase();
+        const isValidUuid = Boolean(
+          currentUser.id &&
+            /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
+              currentUser.id
+            )
+        );
 
-          let queryData: any[] | null = null;
-          let queryError: any = null;
+        let queryData: DbCustomerOrderRow[] | null = null;
+        let queryError: unknown = null;
 
-          // 1. Si user.id est un UUID valide, tenter la recherche combinée email + user_id
-          if (isValidUuid && user?.id) {
-            const res = await supabase
-              .from("orders")
-              .select("*")
-              .or(`customer_email.ilike.${userEmail},user_id.eq.${user.id}`)
-              .order("created_at", { ascending: false });
+        if (isValidUuid && currentUser.id) {
+          const res = await client
+            .from("orders")
+            .select("*")
+            .or(`customer_email.ilike.${userEmail},user_id.eq.${currentUser.id}`)
+            .order("created_at", { ascending: false });
 
-            queryData = res.data;
-            queryError = res.error;
-          }
+          queryData = (res.data as DbCustomerOrderRow[] | null) ?? null;
+          queryError = res.error;
+        }
 
-          // 2. Fallback automatique si la colonne user_id n'existe pas en base, si erreur SQL ou si user.id n'est pas un UUID (ex. compte local 'usr-...')
-          if (!queryData || queryError || !isValidUuid) {
-            const fallbackRes = await supabase
-              .from("orders")
-              .select("*")
-              .ilike("customer_email", userEmail || "")
-              .order("created_at", { ascending: false });
+        if (!queryData || queryError || !isValidUuid) {
+          const fallbackRes = await client
+            .from("orders")
+            .select("*")
+            .ilike("customer_email", userEmail || "")
+            .order("created_at", { ascending: false });
 
-            queryData = fallbackRes.data;
-            queryError = fallbackRes.error;
-          }
+          queryData = (fallbackRes.data as DbCustomerOrderRow[] | null) ?? null;
+          queryError = fallbackRes.error;
+        }
 
-          if (!queryError && queryData && isMounted) {
-            setCustomerOrders(
-              queryData.map((o: any) => ({
-                id: o.id,
-                order_number: o.order_number,
-                date: o.date,
-                customer_first_name: o.customer_first_name,
-                customer_last_name: o.customer_last_name,
-                customer_name: o.customer_name,
-                customer_email: o.customer_email,
-                customer_phone: o.customer_phone,
-                shipping_method_id: o.shipping_method_id,
-                shipping_method: o.shipping_method,
-                shipping_cost: Number(o.shipping_cost || 0),
-                relay_point: o.relay_point,
-                address: o.address,
-                building: o.building,
-                digicode: o.digicode,
-                postal_code: o.postal_code,
-                city: o.city,
-                subtotal: Number(o.subtotal || 0),
-                total: Number(o.total || 0),
-                status: o.status || "pending",
-                tracking: o.tracking || "",
-                items: Array.isArray(o.items) ? o.items : [],
-                created_at: o.created_at,
-                user_id: o.user_id,
-              }))
-            );
-          }
-        } catch (err) {
-          console.warn("Erreur chargement commandes client:", err);
+        if (isMounted) {
+          const mapped: CustomerOrder[] =
+            !queryError && queryData
+              ? queryData.map((o) => ({
+                  id: o.order_number || o.id,
+                  order_number: o.order_number,
+                  date: o.date,
+                  customer_first_name: o.customer_first_name,
+                  customer_last_name: o.customer_last_name,
+                  customer_name: o.customer_name,
+                  customer_email: o.customer_email,
+                  customer_phone: o.customer_phone,
+                  shipping_method_id: o.shipping_method_id ?? undefined,
+                  shipping_method: o.shipping_method,
+                  shipping_cost: Number(o.shipping_cost || 0),
+                  relay_point: o.relay_point ?? null,
+                  address: o.address ?? null,
+                  building: o.building ?? null,
+                  digicode: o.digicode ?? null,
+                  postal_code: o.postal_code ?? undefined,
+                  city: o.city ?? undefined,
+                  subtotal: Number(o.subtotal || 0),
+                  total: Number(o.total || 0),
+                  status: o.status || "pending",
+                  tracking: o.tracking || "",
+                  items: Array.isArray(o.items) ? o.items : [],
+                  created_at: o.created_at ?? undefined,
+                  user_id: o.user_id ?? null,
+                }))
+              : [];
+
+          setOrdersState({ userId: currentUser.id, items: mapped });
+        }
+      } catch (err) {
+        console.warn("Erreur chargement commandes client:", err);
+        if (isMounted) {
+          setOrdersState({ userId: currentUser.id, items: [] });
         }
       }
-      if (isMounted) setIsLoadingOrders(false);
     }
 
     fetchOrders();
@@ -334,7 +399,7 @@ export default function ComptePage() {
     }
   };
 
-  // Handler Recherche Commande Invité
+  // Handler Recherche Commande Invité (Endpoint sécurisé RGPD côté serveur)
   const handleSearchGuestOrder = async (e: React.FormEvent) => {
     e.preventDefault();
     setGuestOrderError(null);
@@ -349,51 +414,30 @@ export default function ComptePage() {
     }
 
     setIsSearchingGuestOrder(true);
-    if (isSupabaseConfigured && supabase) {
-      try {
-        const { data, error } = await supabase
-          .from("orders")
-          .select("*")
-          .ilike("order_number", num)
-          .ilike("customer_email", mail)
-          .maybeSingle();
+    try {
+      const res = await fetch("/api/orders/track", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ orderNumber: num, email: mail }),
+      });
 
-        if (error || !data) {
-          setGuestOrderError("Aucune commande ne correspond à ce numéro et à cette adresse e-mail.");
-        } else {
-          setGuestOrderResult({
-            id: data.id,
-            order_number: data.order_number,
-            date: data.date,
-            customer_first_name: data.customer_first_name,
-            customer_last_name: data.customer_last_name,
-            customer_name: data.customer_name,
-            customer_email: data.customer_email,
-            customer_phone: data.customer_phone,
-            shipping_method_id: data.shipping_method_id,
-            shipping_method: data.shipping_method,
-            shipping_cost: Number(data.shipping_cost || 0),
-            relay_point: data.relay_point,
-            address: data.address,
-            building: data.building,
-            digicode: data.digicode,
-            postal_code: data.postal_code,
-            city: data.city,
-            subtotal: Number(data.subtotal || 0),
-            total: Number(data.total || 0),
-            status: data.status || "pending",
-            tracking: data.tracking || "",
-            items: Array.isArray(data.items) ? data.items : [],
-            created_at: data.created_at,
-          });
-        }
-      } catch {
-        setGuestOrderError("Erreur réseau lors de la recherche de votre commande.");
+      const data = (await res.json().catch(() => ({}))) as {
+        order?: TrackedGuestOrder;
+        error?: string;
+      };
+
+      if (!res.ok || !data.order) {
+        setGuestOrderError(
+          data.error || "Aucune commande ne correspond à ce numéro et à cette adresse e-mail."
+        );
+      } else {
+        setGuestOrderResult(data.order);
       }
-    } else {
-      setGuestOrderError("Le serveur de suivi est temporairement indisponible.");
+    } catch {
+      setGuestOrderError("Erreur réseau lors de la recherche de votre commande.");
+    } finally {
+      setIsSearchingGuestOrder(false);
     }
-    setIsSearchingGuestOrder(false);
   };
 
   const copyToClipboard = (text: string, id: string) => {
@@ -1379,7 +1423,7 @@ export default function ComptePage() {
                         type="text"
                         required
                         value={addressData.firstName}
-                        onChange={(e) => setAddressData({ ...addressData, firstName: e.target.value })}
+                        onChange={(e) => updateAddressField({ firstName: e.target.value })}
                         className="w-full px-4 py-3 rounded-xl border border-[#E7E2DA] focus:border-[#A16207] focus:outline-none text-sm text-[#1C1917]"
                       />
                     </div>
@@ -1389,7 +1433,7 @@ export default function ComptePage() {
                         type="text"
                         required
                         value={addressData.lastName}
-                        onChange={(e) => setAddressData({ ...addressData, lastName: e.target.value })}
+                        onChange={(e) => updateAddressField({ lastName: e.target.value })}
                         className="w-full px-4 py-3 rounded-xl border border-[#E7E2DA] focus:border-[#A16207] focus:outline-none text-sm text-[#1C1917]"
                       />
                     </div>
@@ -1403,7 +1447,7 @@ export default function ComptePage() {
                       type="tel"
                       required
                       value={addressData.phone}
-                      onChange={(e) => setAddressData({ ...addressData, phone: e.target.value })}
+                      onChange={(e) => updateAddressField({ phone: e.target.value })}
                       placeholder="+33 6 12 34 56 78 ou numéro international"
                       className="w-full px-4 py-3 rounded-xl border border-[#E7E2DA] focus:border-[#A16207] focus:outline-none text-sm text-[#1C1917]"
                     />
@@ -1416,7 +1460,7 @@ export default function ComptePage() {
                     <input
                       type="text"
                       value={addressData.address}
-                      onChange={(e) => setAddressData({ ...addressData, address: e.target.value })}
+                      onChange={(e) => updateAddressField({ address: e.target.value })}
                       placeholder="14 Rue des Fleurs"
                       className="w-full px-4 py-3 rounded-xl border border-[#E7E2DA] focus:border-[#A16207] focus:outline-none text-sm text-[#1C1917]"
                     />
@@ -1430,7 +1474,7 @@ export default function ComptePage() {
                       <input
                         type="text"
                         value={addressData.building}
-                        onChange={(e) => setAddressData({ ...addressData, building: e.target.value })}
+                        onChange={(e) => updateAddressField({ building: e.target.value })}
                         placeholder="Bâtiment B, 3ème étage"
                         className="w-full px-4 py-3 rounded-xl border border-[#E7E2DA] focus:border-[#A16207] focus:outline-none text-sm text-[#1C1917]"
                       />
@@ -1442,7 +1486,7 @@ export default function ComptePage() {
                       <input
                         type="text"
                         value={addressData.digicode}
-                        onChange={(e) => setAddressData({ ...addressData, digicode: e.target.value })}
+                        onChange={(e) => updateAddressField({ digicode: e.target.value })}
                         placeholder="Code A1234, sonner Dupont"
                         className="w-full px-4 py-3 rounded-xl border border-[#E7E2DA] focus:border-[#A16207] focus:outline-none text-sm text-[#1C1917]"
                       />
@@ -1456,7 +1500,7 @@ export default function ComptePage() {
                         type="text"
                         required
                         value={addressData.postalCode}
-                        onChange={(e) => setAddressData({ ...addressData, postalCode: e.target.value })}
+                        onChange={(e) => updateAddressField({ postalCode: e.target.value })}
                         placeholder="75011"
                         className="w-full px-4 py-3 rounded-xl border border-[#E7E2DA] focus:border-[#A16207] focus:outline-none text-sm text-[#1C1917]"
                       />
@@ -1467,7 +1511,7 @@ export default function ComptePage() {
                         type="text"
                         required
                         value={addressData.city}
-                        onChange={(e) => setAddressData({ ...addressData, city: e.target.value })}
+                        onChange={(e) => updateAddressField({ city: e.target.value })}
                         placeholder="Paris"
                         className="w-full px-4 py-3 rounded-xl border border-[#E7E2DA] focus:border-[#A16207] focus:outline-none text-sm text-[#1C1917]"
                       />
@@ -1481,7 +1525,7 @@ export default function ComptePage() {
                     </label>
                     <select
                       value={addressData.favoriteFamily}
-                      onChange={(e) => setAddressData({ ...addressData, favoriteFamily: e.target.value })}
+                      onChange={(e) => updateAddressField({ favoriteFamily: e.target.value })}
                       className="w-full px-4 py-3 rounded-xl border border-[#E7E2DA] focus:border-[#A16207] focus:outline-none text-sm text-[#1C1917] bg-white"
                     >
                       <option value="Orientale">Orientale (Ambre, vanille, épices chaudes)</option>

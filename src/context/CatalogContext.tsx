@@ -1,7 +1,7 @@
 "use client";
 
 import React, { createContext, useContext, useState, useEffect, useCallback } from "react";
-import { Product, Category, OlfactoryFamilyItem } from "@/types/store";
+import { Product, Category, OlfactoryFamilyItem, OlfactoryPyramid, ProductVariant } from "@/types/store";
 import { MOCK_PRODUCTS, CATEGORIES } from "@/data/mock-data";
 import { supabase, isSupabaseConfigured } from "@/lib/supabase";
 
@@ -54,6 +54,69 @@ export const DEFAULT_OLFACTORY_FAMILIES: OlfactoryFamilyItem[] = [
   },
 ];
 
+interface DbCategoryRow {
+  id: string;
+  name: string;
+  slug: string;
+  description: string | null;
+}
+
+interface DbFamilyRow {
+  id: string;
+  name: string;
+  mood: string | null;
+  description: string | null;
+}
+
+interface DbProductVariantRow {
+  id: string;
+  sku: string;
+  size_label: string;
+  price: number | string;
+  in_stock: boolean;
+}
+
+interface DbProductRow {
+  id: string;
+  category_id: string;
+  category_name: string;
+  name: string;
+  slug: string;
+  description: string;
+  scent_notes: string[] | null;
+  olfactory_family: string;
+  facets: string;
+  olfactory_pyramid: OlfactoryPyramid;
+  concentration_info: string | null;
+  base_price: number | string;
+  images: string[] | null;
+  is_active: boolean;
+  featured: boolean | null;
+  product_variants: DbProductVariantRow[] | null;
+}
+
+function slugify(str: string): string {
+  return str
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+}
+
+async function readApiError(res: Response, fallback: string): Promise<string> {
+  try {
+    const data = (await res.json()) as { error?: string };
+    if (data && typeof data.error === "string" && data.error.trim()) {
+      return data.error;
+    }
+  } catch {
+    // Ignorer erreur de parsing JSON
+  }
+  return fallback;
+}
+
 interface CatalogContextType {
   products: Product[];
   categories: Category[];
@@ -93,7 +156,7 @@ export function CatalogProvider({ children }: { children: React.ReactNode }) {
   const [isCustomized, setIsCustomized] = useState<boolean>(false);
   const [isLiveDb, setIsLiveDb] = useState<boolean>(false);
 
-  // 1. Chargement initial : Supabase prioritaire avec repli propre sur localStorage
+  // 1. Chargement initial en lecture seule (SELECT public autorisé par RLS)
   useEffect(() => {
     let isMounted = true;
 
@@ -107,7 +170,7 @@ export function CatalogProvider({ children }: { children: React.ReactNode }) {
             .select("*")
             .order("created_at", { ascending: true });
           if (!error && data && data.length > 0) {
-            loadedCategories = data.map((c: any) => ({
+            loadedCategories = (data as DbCategoryRow[]).map((c) => ({
               id: c.id,
               name: c.name,
               slug: c.slug,
@@ -122,7 +185,7 @@ export function CatalogProvider({ children }: { children: React.ReactNode }) {
         try {
           const storedCats = localStorage.getItem(STORAGE_KEY_CATEGORIES);
           if (storedCats) {
-            const parsed = JSON.parse(storedCats);
+            const parsed = JSON.parse(storedCats) as Category[];
             if (Array.isArray(parsed) && parsed.length > 0) {
               loadedCategories = parsed;
             }
@@ -142,7 +205,7 @@ export function CatalogProvider({ children }: { children: React.ReactNode }) {
             .select("*")
             .order("created_at", { ascending: true });
           if (!error && data && data.length > 0) {
-            loadedFamilies = data.map((f: any) => ({
+            loadedFamilies = (data as DbFamilyRow[]).map((f) => ({
               id: f.id,
               name: f.name,
               mood: f.mood || "Accord Signature de Grasse",
@@ -157,7 +220,7 @@ export function CatalogProvider({ children }: { children: React.ReactNode }) {
         try {
           const storedFams = localStorage.getItem(STORAGE_KEY_FAMILIES);
           if (storedFams) {
-            const parsed = JSON.parse(storedFams);
+            const parsed = JSON.parse(storedFams) as OlfactoryFamilyItem[];
             if (Array.isArray(parsed) && parsed.length > 0) {
               loadedFamilies = parsed;
             }
@@ -187,7 +250,7 @@ export function CatalogProvider({ children }: { children: React.ReactNode }) {
               "photo-1616949755610-8c9bbc08f138",
             ];
 
-            loadedProducts = data.map((item: any) => {
+            loadedProducts = (data as DbProductRow[]).map((item) => {
               let images: string[] = item.images || [];
               const mockProd = MOCK_PRODUCTS.find((m) => m.id === item.id);
               const firstImg = images[0] || "";
@@ -197,16 +260,6 @@ export function CatalogProvider({ children }: { children: React.ReactNode }) {
 
               if (mockProd && hasLegacyImg) {
                 images = mockProd.images;
-                // Auto-guérison en direct dans Supabase
-                client
-                  .from("products")
-                  .update({ images: mockProd.images })
-                  .eq("id", mockProd.id)
-                  .then(({ error: updateErr }) => {
-                    if (updateErr) {
-                      console.warn(`Erreur de curation d'image pour ${mockProd.id}:`, updateErr);
-                    }
-                  });
               }
 
               return {
@@ -220,13 +273,13 @@ export function CatalogProvider({ children }: { children: React.ReactNode }) {
                 olfactory_family: item.olfactory_family,
                 facets: item.facets,
                 olfactory_pyramid: item.olfactory_pyramid,
-                concentration_info: item.concentration_info,
+                concentration_info: item.concentration_info || undefined,
                 base_price: Number(item.base_price),
                 images,
                 is_active: item.is_active,
-                featured: item.featured,
+                featured: Boolean(item.featured),
                 variants:
-                  item.product_variants?.map((v: any) => ({
+                  item.product_variants?.map((v): ProductVariant => ({
                     id: v.id,
                     sku: v.sku,
                     size_label: v.size_label,
@@ -244,11 +297,11 @@ export function CatalogProvider({ children }: { children: React.ReactNode }) {
         }
       }
 
-      // Repli localStorage pour les produits
+      // Repli localStorage en lecture seule si Supabase n'a rien retourné
       try {
         const saved = localStorage.getItem(STORAGE_KEY_PRODUCTS);
         if (saved && isMounted) {
-          const parsed = JSON.parse(saved);
+          const parsed = JSON.parse(saved) as Product[];
           if (Array.isArray(parsed) && parsed.length > 0) {
             setProducts(parsed);
             setIsCustomized(true);
@@ -266,43 +319,9 @@ export function CatalogProvider({ children }: { children: React.ReactNode }) {
     };
   }, []);
 
-  // 2. Écouter les modifications multi-onglets en local
-  useEffect(() => {
-    const handleStorageChange = (e: StorageEvent) => {
-      if (e.key === STORAGE_KEY_PRODUCTS && e.newValue) {
-        try {
-          const parsed = JSON.parse(e.newValue);
-          if (Array.isArray(parsed)) {
-            setProducts(parsed);
-            setIsCustomized(true);
-          }
-        } catch {
-          // Ignorer
-        }
-      } else if (e.key === STORAGE_KEY_CATEGORIES && e.newValue) {
-        try {
-          const parsed = JSON.parse(e.newValue);
-          if (Array.isArray(parsed)) setCategories(parsed);
-        } catch {
-          // Ignorer
-        }
-      } else if (e.key === STORAGE_KEY_FAMILIES && e.newValue) {
-        try {
-          const parsed = JSON.parse(e.newValue);
-          if (Array.isArray(parsed)) setOlfactoryFamilies(parsed);
-        } catch {
-          // Ignorer
-        }
-      }
-    };
-    window.addEventListener("storage", handleStorageChange);
-    return () => window.removeEventListener("storage", handleStorageChange);
-  }, []);
-
-  // --- ACTIONS PRODUITS & VARIANTES ---
+  // --- ACTIONS PRODUITS & VARIANTES (API ADMIN PROTÉGÉE) ---
 
   const addProduct = useCallback(async (newProduct: Product) => {
-    // Calcul automatique du base_price selon la variante la plus accessible
     let computedBasePrice = Number(newProduct.base_price);
     if (newProduct.variants && newProduct.variants.length > 0) {
       const positivePrices = newProduct.variants
@@ -332,59 +351,23 @@ export function CatalogProvider({ children }: { children: React.ReactNode }) {
             ],
     };
 
-    setProducts((prev) => {
-      const updated = [productWithVariants, ...prev];
-      try {
-        localStorage.setItem(STORAGE_KEY_PRODUCTS, JSON.stringify(updated));
-      } catch (e) {
-        console.warn("Erreur sauvegarde localStorage", e);
-      }
-      setIsCustomized(true);
-      return updated;
+    const res = await fetch("/api/admin/products", {
+      method: "POST",
+      credentials: "include",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ product: productWithVariants }),
     });
 
-    if (isSupabaseConfigured && supabase) {
-      const client = supabase;
-      try {
-        const { error: prodError } = await client.from("products").insert({
-          id: productWithVariants.id,
-          category_id: productWithVariants.category_id,
-          category_name: productWithVariants.category_name,
-          name: productWithVariants.name,
-          slug: productWithVariants.slug,
-          description: productWithVariants.description,
-          scent_notes: productWithVariants.scent_notes,
-          olfactory_family: productWithVariants.olfactory_family,
-          facets: productWithVariants.facets,
-          olfactory_pyramid: productWithVariants.olfactory_pyramid,
-          concentration_info: productWithVariants.concentration_info,
-          base_price: productWithVariants.base_price,
-          images: productWithVariants.images,
-          is_active: productWithVariants.is_active,
-          featured: productWithVariants.featured || false,
-        });
-
-        if (prodError) {
-          console.error("Erreur insertion produit Supabase:", prodError);
-          return;
-        }
-
-        if (productWithVariants.variants && productWithVariants.variants.length > 0) {
-          const variantsData = productWithVariants.variants.map((v) => ({
-            id: v.id,
-            product_id: productWithVariants.id,
-            sku: v.sku,
-            size_label: v.size_label,
-            price: Number(v.price),
-            in_stock: v.in_stock ?? true,
-          }));
-
-          await client.from("product_variants").insert(variantsData);
-        }
-      } catch (err) {
-        console.error("Erreur réseau Supabase lors de l'ajout:", err);
-      }
+    if (!res.ok) {
+      throw new Error(await readApiError(res, "Impossible d'ajouter le produit."));
     }
+
+    const data = (await res.json()) as { product?: Product };
+    const savedProduct = data.product || productWithVariants;
+
+    setProducts((prev) => [savedProduct, ...prev]);
+    setIsCustomized(true);
+    setIsLiveDb(true);
   }, []);
 
   const updateProduct = useCallback(async (updatedProduct: Product) => {
@@ -403,410 +386,296 @@ export function CatalogProvider({ children }: { children: React.ReactNode }) {
       base_price: computedBasePrice,
     };
 
-    setProducts((prev) => {
-      const updated = prev.map((p) => (p.id === finalizedProduct.id ? finalizedProduct : p));
-      try {
-        localStorage.setItem(STORAGE_KEY_PRODUCTS, JSON.stringify(updated));
-      } catch (e) {
-        console.warn("Erreur sauvegarde localStorage", e);
-      }
-      setIsCustomized(true);
-      return updated;
+    const res = await fetch("/api/admin/products", {
+      method: "PATCH",
+      credentials: "include",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ product: finalizedProduct }),
     });
 
-    if (isSupabaseConfigured && supabase) {
-      const client = supabase;
-      try {
-        // 1. Mettre à jour les données du produit
-        await client
-          .from("products")
-          .update({
-            category_id: finalizedProduct.category_id,
-            category_name: finalizedProduct.category_name,
-            name: finalizedProduct.name,
-            slug: finalizedProduct.slug,
-            description: finalizedProduct.description,
-            scent_notes: finalizedProduct.scent_notes,
-            olfactory_family: finalizedProduct.olfactory_family,
-            facets: finalizedProduct.facets,
-            olfactory_pyramid: finalizedProduct.olfactory_pyramid,
-            concentration_info: finalizedProduct.concentration_info,
-            base_price: finalizedProduct.base_price,
-            images: finalizedProduct.images,
-            is_active: finalizedProduct.is_active,
-            featured: finalizedProduct.featured || false,
-            updated_at: new Date().toISOString(),
-          })
-          .eq("id", finalizedProduct.id);
-
-        // 2. Réconcilier les variantes (suppression puis réinsertion)
-        await client.from("product_variants").delete().eq("product_id", finalizedProduct.id);
-
-        if (finalizedProduct.variants && finalizedProduct.variants.length > 0) {
-          const variantsData = finalizedProduct.variants.map((v) => ({
-            id: v.id,
-            product_id: finalizedProduct.id,
-            sku: v.sku,
-            size_label: v.size_label,
-            price: Number(v.price),
-            in_stock: v.in_stock ?? true,
-          }));
-
-          await client.from("product_variants").insert(variantsData);
-        }
-      } catch (err) {
-        console.error("Erreur mise à jour Supabase:", err);
-      }
+    if (!res.ok) {
+      throw new Error(await readApiError(res, "Impossible de mettre à jour le produit."));
     }
+
+    const data = (await res.json()) as { product?: Product };
+    const savedProduct = data.product || finalizedProduct;
+
+    setProducts((prev) => prev.map((p) => (p.id === savedProduct.id ? savedProduct : p)));
+    setIsCustomized(true);
+    setIsLiveDb(true);
   }, []);
 
   const deleteProduct = useCallback(async (productId: string) => {
-    setProducts((prev) => {
-      const updated = prev.filter((p) => p.id !== productId);
-      try {
-        localStorage.setItem(STORAGE_KEY_PRODUCTS, JSON.stringify(updated));
-      } catch (e) {
-        console.warn("Erreur sauvegarde localStorage après suppression", e);
-      }
-      setIsCustomized(true);
-      return updated;
+    const res = await fetch("/api/admin/products", {
+      method: "DELETE",
+      credentials: "include",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id: productId }),
     });
 
-    if (isSupabaseConfigured && supabase) {
-      try {
-        await supabase.from("products").delete().eq("id", productId);
-      } catch (err) {
-        console.error("Erreur suppression Supabase:", err);
-      }
+    if (!res.ok) {
+      throw new Error(await readApiError(res, "Impossible de supprimer ce produit."));
     }
+
+    setProducts((prev) => prev.filter((p) => p.id !== productId));
+    setIsCustomized(true);
+    setIsLiveDb(true);
   }, []);
 
-  const toggleStock = useCallback(async (productId: string) => {
-    let newStatus = true;
-    setProducts((prev) => {
-      const current = prev.find((p) => p.id === productId);
-      newStatus = current ? !current.is_active : true;
+  const toggleStock = useCallback(
+    async (productId: string) => {
+      const current = products.find((p) => p.id === productId);
+      const newStatus = current ? !current.is_active : true;
 
-      const updated = prev.map((p) =>
-        p.id === productId ? { ...p, is_active: newStatus } : p
+      const res = await fetch("/api/admin/products", {
+        method: "PATCH",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "toggleStock",
+          productId,
+          is_active: newStatus,
+        }),
+      });
+
+      if (!res.ok) {
+        throw new Error(
+          await readApiError(res, "Impossible de modifier la disponibilité du produit.")
+        );
+      }
+
+      setProducts((prev) =>
+        prev.map((p) => (p.id === productId ? { ...p, is_active: newStatus } : p))
       );
-
-      try {
-        localStorage.setItem(STORAGE_KEY_PRODUCTS, JSON.stringify(updated));
-      } catch (e) {
-        console.warn("Erreur sauvegarde localStorage", e);
-      }
       setIsCustomized(true);
-      return updated;
-    });
-
-    if (isSupabaseConfigured && supabase) {
-      try {
-        await supabase
-          .from("products")
-          .update({ is_active: newStatus, updated_at: new Date().toISOString() })
-          .eq("id", productId);
-      } catch (err) {
-        console.error("Erreur mise à jour stock produit Supabase:", err);
-      }
-    }
-  }, []);
+      setIsLiveDb(true);
+    },
+    [products]
+  );
 
   const toggleVariantStock = useCallback(
     async (productId: string, variantId: string) => {
-      let targetNewStatus = true;
+      const currentProduct = products.find((p) => p.id === productId);
+      const currentVariant = currentProduct?.variants?.find((v) => v.id === variantId);
+      const targetNewStatus = currentVariant ? !currentVariant.in_stock : true;
 
-      setProducts((prev) => {
-        const updated = prev.map((p) => {
-          if (p.id !== productId || !p.variants) return p;
-          const newVariants = p.variants.map((v) => {
-            if (v.id === variantId) {
-              targetNewStatus = !v.in_stock;
-              return { ...v, in_stock: targetNewStatus };
-            }
-            return v;
-          });
-          return { ...p, variants: newVariants };
-        });
-
-        try {
-          localStorage.setItem(STORAGE_KEY_PRODUCTS, JSON.stringify(updated));
-        } catch (e) {
-          console.warn("Erreur sauvegarde localStorage", e);
-        }
-        setIsCustomized(true);
-        return updated;
+      const res = await fetch("/api/admin/products", {
+        method: "PATCH",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "toggleVariantStock",
+          productId,
+          variantId,
+          in_stock: targetNewStatus,
+        }),
       });
 
-      if (isSupabaseConfigured && supabase) {
-        try {
-          await supabase
-            .from("product_variants")
-            .update({ in_stock: targetNewStatus })
-            .eq("id", variantId);
-        } catch (err) {
-          console.error("Erreur mise à jour stock variante Supabase:", err);
-        }
+      if (!res.ok) {
+        throw new Error(await readApiError(res, "Impossible de modifier le stock de ce format."));
       }
+
+      setProducts((prev) =>
+        prev.map((p) => {
+          if (p.id !== productId || !p.variants) return p;
+          return {
+            ...p,
+            variants: p.variants.map((v) =>
+              v.id === variantId ? { ...v, in_stock: targetNewStatus } : v
+            ),
+          };
+        })
+      );
+      setIsCustomized(true);
+      setIsLiveDb(true);
     },
-    []
+    [products]
   );
 
-  // --- ACTIONS CATÉGORIES ---
+  // --- ACTIONS CATÉGORIES (API ADMIN PROTÉGÉE) ---
 
   const addCategory = useCallback(async (cat: Omit<Category, "id">) => {
-    const newId = `cat-${Date.now()}`;
     const newCat: Category = {
-      id: newId,
+      id: `cat-${Date.now()}`,
       name: cat.name.trim(),
-      slug: cat.slug || cat.name.toLowerCase().trim().replace(/[^a-z0-9]+/g, "-"),
+      slug: cat.slug ? slugify(cat.slug) : slugify(cat.name),
       description: cat.description || "",
     };
 
-    setCategories((prev) => {
-      const updated = [...prev, newCat];
-      try {
-        localStorage.setItem(STORAGE_KEY_CATEGORIES, JSON.stringify(updated));
-      } catch (e) {
-        console.warn(e);
-      }
-      return updated;
+    const res = await fetch("/api/admin/taxonomies", {
+      method: "POST",
+      credentials: "include",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ type: "category", ...newCat }),
     });
 
-    if (isSupabaseConfigured && supabase) {
-      try {
-        await supabase.from("categories").insert(newCat);
-      } catch (err) {
-        console.error("Erreur insertion catégorie Supabase:", err);
-      }
+    if (!res.ok) {
+      throw new Error(await readApiError(res, "Impossible d'ajouter la catégorie."));
     }
+
+    const data = (await res.json()) as { category?: Category };
+    const savedCat = data.category || newCat;
+
+    setCategories((prev) => [...prev, savedCat]);
+    setIsLiveDb(true);
   }, []);
 
   const updateCategory = useCallback(async (cat: Category) => {
-    setCategories((prev) => {
-      const updated = prev.map((c) => (c.id === cat.id ? cat : c));
-      try {
-        localStorage.setItem(STORAGE_KEY_CATEGORIES, JSON.stringify(updated));
-      } catch (e) {
-        console.warn(e);
-      }
-      return updated;
+    const normalizedCat: Category = {
+      ...cat,
+      name: cat.name.trim(),
+      slug: cat.slug ? slugify(cat.slug) : slugify(cat.name),
+      description: cat.description || "",
+    };
+
+    const res = await fetch("/api/admin/taxonomies", {
+      method: "PATCH",
+      credentials: "include",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ type: "category", ...normalizedCat }),
     });
 
-    // Mettre à jour category_name dans les produits associés
-    setProducts((prev) => {
-      const updated = prev.map((p) =>
-        p.category_id === cat.id ? { ...p, category_name: cat.name } : p
-      );
-      try {
-        localStorage.setItem(STORAGE_KEY_PRODUCTS, JSON.stringify(updated));
-      } catch (e) {
-        console.warn(e);
-      }
-      return updated;
-    });
-
-    if (isSupabaseConfigured && supabase) {
-      try {
-        await supabase
-          .from("categories")
-          .update({
-            name: cat.name,
-            slug: cat.slug,
-            description: cat.description,
-          })
-          .eq("id", cat.id);
-
-        await supabase
-          .from("products")
-          .update({ category_name: cat.name })
-          .eq("category_id", cat.id);
-      } catch (err) {
-        console.error("Erreur mise à jour catégorie Supabase:", err);
-      }
+    if (!res.ok) {
+      throw new Error(await readApiError(res, "Impossible de modifier la catégorie."));
     }
+
+    const data = (await res.json()) as { category?: Category };
+    const savedCat = data.category || normalizedCat;
+
+    setCategories((prev) => prev.map((c) => (c.id === savedCat.id ? savedCat : c)));
+    setProducts((prev) =>
+      prev.map((p) => (p.category_id === savedCat.id ? { ...p, category_name: savedCat.name } : p))
+    );
+    setIsLiveDb(true);
   }, []);
 
   const deleteCategory = useCallback(async (categoryId: string) => {
-    setCategories((prev) => {
-      const updated = prev.filter((c) => c.id !== categoryId);
-      try {
-        localStorage.setItem(STORAGE_KEY_CATEGORIES, JSON.stringify(updated));
-      } catch (e) {
-        console.warn(e);
-      }
-      return updated;
+    const res = await fetch("/api/admin/taxonomies", {
+      method: "DELETE",
+      credentials: "include",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ type: "category", id: categoryId }),
     });
 
-    if (isSupabaseConfigured && supabase) {
-      try {
-        await supabase.from("categories").delete().eq("id", categoryId);
-      } catch (err) {
-        console.error("Erreur suppression catégorie Supabase:", err);
-      }
+    if (!res.ok) {
+      throw new Error(await readApiError(res, "Impossible de supprimer la catégorie."));
     }
+
+    setCategories((prev) => prev.filter((c) => c.id !== categoryId));
+    setIsLiveDb(true);
   }, []);
 
-  // --- ACTIONS FAMILLES OLFACTIVES ---
+  // --- ACTIONS FAMILLES OLFACTIVES (API ADMIN PROTÉGÉE) ---
 
   const addOlfactoryFamily = useCallback(async (fam: Omit<OlfactoryFamilyItem, "id">) => {
-    const newId = `fam-${Date.now()}`;
     const newFam: OlfactoryFamilyItem = {
-      id: newId,
+      id: `fam-${Date.now()}`,
       name: fam.name.trim(),
       mood: fam.mood.trim() || "Accord Signature de Grasse",
       description: fam.description || "",
     };
 
-    setOlfactoryFamilies((prev) => {
-      const updated = [...prev, newFam];
-      try {
-        localStorage.setItem(STORAGE_KEY_FAMILIES, JSON.stringify(updated));
-      } catch (e) {
-        console.warn(e);
-      }
-      return updated;
+    const res = await fetch("/api/admin/taxonomies", {
+      method: "POST",
+      credentials: "include",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ type: "family", ...newFam }),
     });
 
-    if (isSupabaseConfigured && supabase) {
-      try {
-        await supabase.from("olfactory_families").insert(newFam);
-      } catch (err) {
-        console.warn("Table olfactory_families non disponible sur Supabase:", err);
-      }
+    if (!res.ok) {
+      throw new Error(await readApiError(res, "Impossible d'ajouter la famille olfactive."));
     }
+
+    const data = (await res.json()) as { family?: OlfactoryFamilyItem };
+    const savedFam = data.family || newFam;
+
+    setOlfactoryFamilies((prev) => [...prev, savedFam]);
+    setIsLiveDb(true);
   }, []);
 
   const updateOlfactoryFamily = useCallback(
     async (fam: OlfactoryFamilyItem, oldName?: string) => {
-      setOlfactoryFamilies((prev) => {
-        const updated = prev.map((f) => (f.id === fam.id ? fam : f));
-        try {
-          localStorage.setItem(STORAGE_KEY_FAMILIES, JSON.stringify(updated));
-        } catch (e) {
-          console.warn(e);
-        }
-        return updated;
+      const normalizedFam: OlfactoryFamilyItem = {
+        ...fam,
+        name: fam.name.trim(),
+        mood: fam.mood.trim() || "Accord Signature de Grasse",
+        description: fam.description || "",
+      };
+
+      const res = await fetch("/api/admin/taxonomies", {
+        method: "PATCH",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          type: "family",
+          ...normalizedFam,
+          oldName,
+        }),
       });
 
-      if (oldName && oldName !== fam.name) {
-        setProducts((prev) => {
-          const updated = prev.map((p) =>
-            p.olfactory_family === oldName ? { ...p, olfactory_family: fam.name } : p
-          );
-          try {
-            localStorage.setItem(STORAGE_KEY_PRODUCTS, JSON.stringify(updated));
-          } catch (e) {
-            console.warn(e);
-          }
-          return updated;
-        });
+      if (!res.ok) {
+        throw new Error(await readApiError(res, "Impossible de modifier la famille olfactive."));
       }
 
-      if (isSupabaseConfigured && supabase) {
-        try {
-          await supabase
-            .from("olfactory_families")
-            .update({
-              name: fam.name,
-              mood: fam.mood,
-              description: fam.description,
-            })
-            .eq("id", fam.id);
+      const data = (await res.json()) as { family?: OlfactoryFamilyItem };
+      const savedFam = data.family || normalizedFam;
 
-          if (oldName && oldName !== fam.name) {
-            await supabase
-              .from("products")
-              .update({ olfactory_family: fam.name })
-              .eq("olfactory_family", oldName);
-          }
-        } catch (err) {
-          console.warn("Table olfactory_families Supabase:", err);
-        }
+      setOlfactoryFamilies((prev) => prev.map((f) => (f.id === savedFam.id ? savedFam : f)));
+      if (oldName && oldName !== savedFam.name) {
+        setProducts((prev) =>
+          prev.map((p) =>
+            p.olfactory_family === oldName ? { ...p, olfactory_family: savedFam.name } : p
+          )
+        );
       }
+      setIsLiveDb(true);
     },
     []
   );
 
   const deleteOlfactoryFamily = useCallback(async (familyId: string) => {
-    setOlfactoryFamilies((prev) => {
-      const updated = prev.filter((f) => f.id !== familyId);
-      try {
-        localStorage.setItem(STORAGE_KEY_FAMILIES, JSON.stringify(updated));
-      } catch (e) {
-        console.warn(e);
-      }
-      return updated;
+    const res = await fetch("/api/admin/taxonomies", {
+      method: "DELETE",
+      credentials: "include",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ type: "family", id: familyId }),
     });
 
-    if (isSupabaseConfigured && supabase) {
-      try {
-        await supabase.from("olfactory_families").delete().eq("id", familyId);
-      } catch (err) {
-        console.warn(err);
-      }
+    if (!res.ok) {
+      throw new Error(await readApiError(res, "Impossible de supprimer cette famille olfactive."));
     }
+
+    setOlfactoryFamilies((prev) => prev.filter((f) => f.id !== familyId));
+    setIsLiveDb(true);
   }, []);
 
   // --- RÉINITIALISATION DU CATALOGUE DÉMO ---
 
   const resetCatalog = useCallback(async () => {
-    setProducts(MOCK_PRODUCTS);
-    setCategories(CATEGORIES);
-    setOlfactoryFamilies(DEFAULT_OLFACTORY_FAMILIES);
-    setIsCustomized(false);
+    const res = await fetch("/api/admin/products", {
+      method: "POST",
+      credentials: "include",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "reset" }),
+    });
+
+    if (!res.ok) {
+      throw new Error(await readApiError(res, "Impossible de réinitialiser le catalogue."));
+    }
 
     try {
       localStorage.removeItem(STORAGE_KEY_PRODUCTS);
       localStorage.removeItem(STORAGE_KEY_CATEGORIES);
       localStorage.removeItem(STORAGE_KEY_FAMILIES);
-    } catch (e) {
-      console.warn("Erreur suppression localStorage", e);
+    } catch {
+      // Ignorer
     }
 
-    if (isSupabaseConfigured && supabase) {
-      const client = supabase;
-      const officialIds = [
-        "prod-1",
-        "prod-2",
-        "prod-3",
-        "prod-4",
-        "prod-5",
-        "prod-6",
-        "prod-7",
-        "prod-8",
-      ];
-
-      try {
-        // 1. Supprimer les créations additionnelles
-        await client
-          .from("products")
-          .delete()
-          .not("id", "in", '("prod-1","prod-2","prod-3","prod-4","prod-5","prod-6","prod-7","prod-8")');
-
-        // 2. Réactiver les 8 produits officiels et restaurer leurs images officielles
-        for (const mockProd of MOCK_PRODUCTS) {
-          if (officialIds.includes(mockProd.id)) {
-            await client
-              .from("products")
-              .update({
-                is_active: true,
-                images: mockProd.images,
-                updated_at: new Date().toISOString(),
-              })
-              .eq("id", mockProd.id);
-          }
-        }
-
-        // 3. Rétablir le stock sur toutes les variantes
-        await client
-          .from("product_variants")
-          .update({ in_stock: true })
-          .in("product_id", officialIds);
-      } catch (err) {
-        console.error("Erreur réinitialisation Supabase:", err);
-      }
-    }
+    setProducts(MOCK_PRODUCTS);
+    setCategories(CATEGORIES);
+    setOlfactoryFamilies(DEFAULT_OLFACTORY_FAMILIES);
+    setIsCustomized(false);
+    setIsLiveDb(true);
   }, []);
 
   const getProductBySlug = useCallback(

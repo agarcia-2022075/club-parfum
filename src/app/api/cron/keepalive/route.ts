@@ -1,12 +1,14 @@
 import { NextResponse } from "next/server";
 import { getSupabaseAdmin } from "@/lib/supabase";
+import { safeEqualSecret } from "@/lib/admin-auth";
 
 export async function GET(request: Request) {
   try {
     const authHeader = request.headers.get("authorization");
-    // Si CRON_SECRET est défini sur Vercel, valider l'appel
-    if (process.env.CRON_SECRET && authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
-      // Vercel Cron envoie cette signature automatiquement
+    const cronSecret = process.env.CRON_SECRET?.trim();
+
+    if (cronSecret && !safeEqualSecret(authHeader || "", `Bearer ${cronSecret}`)) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
     const supabase = getSupabaseAdmin();
@@ -17,7 +19,7 @@ export async function GET(request: Request) {
       );
     }
 
-    // Query minimale ultraliviana para registrar actividad en la base de datos
+    // Query minimale ultralégère pour enregistrer l'activité dans la base de données
     const { count, error } = await supabase
       .from("categories")
       .select("id", { count: "exact", head: true });
@@ -35,9 +37,10 @@ export async function GET(request: Request) {
       timestamp: new Date().toISOString(),
       recordsPinged: count,
     });
-  } catch (err: any) {
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : "Unknown error";
     return NextResponse.json(
-      { status: "error", message: err.message || "Unknown error" },
+      { status: "error", message },
       { status: 500 }
     );
   }

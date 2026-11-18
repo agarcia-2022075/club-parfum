@@ -44,7 +44,7 @@ export function Header() {
         </div>
       </aside>
 
-      <header className="w-full overflow-hidden sticky top-0 z-50 bg-[#FAFAF8]/95 backdrop-blur-md border-b border-[#E7E2DA] transition-all">
+      <header className="w-full overflow-visible sticky top-0 z-50 bg-[#FAFAF8]/95 backdrop-blur-md border-b border-[#E7E2DA] transition-all">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between min-h-[84px] py-3 gap-2 sm:gap-6">
             {/* Logo / Maison de Parfum en une seule ligne */}
@@ -73,11 +73,11 @@ export function Header() {
                   className="whitespace-nowrap text-[15px] lg:text-[16px] font-normal text-[#292524] hover:text-[#A16207] transition-colors py-3 inline-flex items-center gap-1.5 cursor-pointer"
                 >
                   <span>Parfums</span>
-                  <ChevronDown className="w-4 h-4 text-[#78716C] group-hover:text-[#A16207] transition-transform duration-200 group-hover:rotate-180" />
+                  <ChevronDown className="w-4 h-4 text-[#78716C] group-hover:text-[#A16207] group-focus-within:text-[#A16207] transition-transform duration-200 group-hover:rotate-180 group-focus-within:rotate-180" />
                 </Link>
 
                 {/* Menu Flottant Blanc */}
-                <div className="absolute left-0 top-full pt-1.5 w-72 z-50 hidden group-hover:block transition-all duration-200">
+                <div className="absolute left-0 top-full pt-1.5 w-72 z-50 hidden group-hover:block group-focus-within:block transition-all duration-200">
                   <div className="bg-white border border-[#E7E2DA] shadow-[0_14px_34px_rgba(28,25,23,0.12)] py-2">
                     <Link
                       href="/categories/eaux-de-parfum"
@@ -124,11 +124,11 @@ export function Header() {
                   className="whitespace-nowrap text-[15px] lg:text-[16px] font-normal text-[#292524] hover:text-[#A16207] transition-colors py-3 inline-flex items-center gap-1.5 cursor-pointer"
                 >
                   <span>Maison</span>
-                  <ChevronDown className="w-4 h-4 text-[#78716C] group-hover:text-[#A16207] transition-transform duration-200 group-hover:rotate-180" />
+                  <ChevronDown className="w-4 h-4 text-[#78716C] group-hover:text-[#A16207] group-focus-within:text-[#A16207] transition-transform duration-200 group-hover:rotate-180 group-focus-within:rotate-180" />
                 </Link>
 
                 {/* Menu Flottant Blanc */}
-                <div className="absolute left-0 top-full pt-1.5 w-76 z-50 hidden group-hover:block transition-all duration-200">
+                <div className="absolute left-0 top-full pt-1.5 w-76 z-50 hidden group-hover:block group-focus-within:block transition-all duration-200">
                   <div className="bg-white border border-[#E7E2DA] shadow-[0_14px_34px_rgba(28,25,23,0.12)] py-2">
                     <Link
                       href="/categories/bougies-parfumees"

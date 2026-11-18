@@ -11,7 +11,6 @@ import {
   Clock,
   Truck,
   ArrowLeft,
-  Eye,
   X,
   Camera,
   RotateCcw,
@@ -24,7 +23,6 @@ import {
   Printer,
   MessageCircle,
   Pencil,
-  Tag,
   Layers,
   Check,
   AlertCircle,
@@ -39,9 +37,17 @@ import {
 } from "lucide-react";
 import { useCatalog } from "@/context/CatalogContext";
 import { formatPrice } from "@/lib/utils";
-import { OlfactoryFamily, OlfactoryFamilyItem, Product, ProductVariant, Category } from "@/types/store";
+import { OlfactoryFamily, Product, ProductVariant } from "@/types/store";
 import { getOlfactoryTheme } from "@/lib/olfactory-theme";
-import { supabase, isSupabaseConfigured } from "@/lib/supabase";
+
+const slugify = (str: string) =>
+  str
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
 
 interface AdminOrderItem {
   name: string;
@@ -71,65 +77,71 @@ interface AdminOrder {
   tracking: string;
 }
 
-const INITIAL_ORDERS: AdminOrder[] = [
-  {
-    id: "CP-2026-0042",
-    dbId: "ord-demo-42",
-    date: "Aujourd'hui à 14:20",
-    customer: "Sophie Martin",
-    email: "sophie.martin@example.fr",
-    phone: "06 12 34 56 78",
-    items: [
-      { name: "Bougie Ambre Précieux & Vanille", variant: "180 g (env. 45h)", qty: 2, price: 24.90 },
-      { name: "Eau de Parfum Fleur de Coton", variant: "Flacon 50 ml", qty: 1, price: 28.00 },
-    ],
-    shipping_method: "Point Relais (Mondial Relay)",
-    relay_point: "Tabac Presse des Fleurs - 75011 Paris (Code: 14209)",
-    address: null,
-    shipping_cost: 0.0,
-    total: 77.8,
-    status: "pending",
-    tracking: "",
-  },
-  {
-    id: "CP-2026-0041",
-    dbId: "ord-demo-41",
-    date: "Hier à 19:45",
-    customer: "Lucas Bernard",
-    email: "lucas.b@example.fr",
-    phone: "07 98 76 54 32",
-    items: [
-      { name: "Diffuseur à Tiges Cèdre de l'Atlas & Sauge", variant: "100 ml + 8 bâtonnets", qty: 1, price: 28.50 },
-    ],
-    shipping_method: "Colissimo Domicile",
-    relay_point: null,
-    address: "18 Rue de la Paix, Bât B - Digicode: 2408B, 69002 Lyon",
-    postal_code: "69002",
-    city: "Lyon",
-    shipping_cost: 6.9,
-    total: 35.4,
-    status: "shipped",
-    tracking: "6A14892058190",
-  },
-  {
-    id: "CP-2026-0040",
-    dbId: "ord-demo-40",
-    date: "14 Oct. à 11:10",
-    customer: "Camille Dubois",
-    email: "camille.d@example.fr",
-    phone: "06 55 44 33 22",
-    items: [{ name: "Bougie Fleur d'Oranger & Néroli", variant: "180 g (env. 45h)", qty: 1, price: 24.90 }],
-    shipping_method: "Point Relais (Mondial Relay)",
-    relay_point: "Épicerie Bio - 31000 Toulouse (Code: 09844)",
-    address: null,
-    postal_code: "31000",
-    city: "Toulouse",
-    shipping_cost: 4.5,
-    total: 29.4,
-    status: "delivered",
-    tracking: "MR88392019FR",
-  },
-];
+interface DbOrderItemRow {
+  name?: string;
+  variant?: string;
+  qty?: number | string;
+  price?: number | string;
+}
+
+interface DbOrderRow {
+  id: string;
+  order_number?: string | null;
+  date?: string | null;
+  created_at?: string | null;
+  customer_name?: string | null;
+  customer_first_name?: string | null;
+  customer_last_name?: string | null;
+  customer_email?: string | null;
+  customer_phone?: string | null;
+  items?: DbOrderItemRow[] | null;
+  shipping_method?: string | null;
+  relay_point?: string | null;
+  address?: string | null;
+  building?: string | null;
+  digicode?: string | null;
+  postal_code?: string | null;
+  city?: string | null;
+  shipping_cost?: number | string | null;
+  total?: number | string | null;
+  status?: string | null;
+  tracking?: string | null;
+}
+
+function mapDbOrderToAdminOrder(row: DbOrderRow): AdminOrder {
+  const fullName = `${row.customer_first_name || ""} ${row.customer_last_name || ""}`.trim();
+  const formattedDate = row.created_at
+    ? new Date(row.created_at).toLocaleDateString("fr-FR")
+    : "Date inconnue";
+
+  return {
+    id: row.order_number || row.id,
+    dbId: row.id,
+    date: row.date || formattedDate,
+    customer: row.customer_name || fullName || "Client",
+    email: row.customer_email || "",
+    phone: row.customer_phone || "",
+    items: Array.isArray(row.items)
+      ? row.items.map((it) => ({
+          name: it.name || "Article",
+          variant: it.variant || "",
+          qty: Number(it.qty || 1),
+          price: Number(it.price || 0),
+        }))
+      : [],
+    shipping_method: row.shipping_method || "",
+    relay_point: row.relay_point ?? null,
+    address: row.address ?? null,
+    building: row.building ?? null,
+    digicode: row.digicode ?? null,
+    postal_code: row.postal_code ?? null,
+    city: row.city ?? null,
+    shipping_cost: Number(row.shipping_cost || 0),
+    total: Number(row.total || 0),
+    status: row.status || "pending",
+    tracking: row.tracking || "",
+  };
+}
 
 export default function AdminDashboard() {
   // --- AUTHENTIFICATION GÉRANCE & DUAL AUTH ---
@@ -141,7 +153,6 @@ export default function AdminDashboard() {
   const [adminPassword, setAdminPassword] = useState("");
   const [authError, setAuthError] = useState("");
   const [isSubmittingAuth, setIsSubmittingAuth] = useState(false);
-  const [adminToken, setAdminToken] = useState<string>("");
 
   // --- NAVIGATION PAR ONGLETS ---
   const [activeTab, setActiveTab] = useState<"orders" | "products" | "taxonomies">("orders");
@@ -163,12 +174,13 @@ export default function AdminDashboard() {
     updateOlfactoryFamily,
     deleteOlfactoryFamily,
     resetCatalog,
-    isCustomized,
     isLiveDb,
   } = useCatalog();
 
   // --- ÉTAT DES COMMANDES ---
-  const [orders, setOrders] = useState<AdminOrder[]>(INITIAL_ORDERS);
+  const [orders, setOrders] = useState<AdminOrder[]>([]);
+  const [isLoadingOrders, setIsLoadingOrders] = useState<boolean>(false);
+  const [ordersError, setOrdersError] = useState<string | null>(null);
   const [selectedOrder, setSelectedOrder] = useState<AdminOrder | null>(null);
   const [orderSearch, setOrderSearch] = useState("");
   const [orderStatusFilter, setOrderStatusFilter] = useState<
@@ -176,13 +188,18 @@ export default function AdminDashboard() {
   >("all");
   const [modalTracking, setModalTracking] = useState("");
   const [modalStatus, setModalStatus] = useState<string>("pending");
-  const [orderActionFeedback, setOrderActionFeedback] = useState<string | null>(null);
+  const [isSavingOrder, setIsSavingOrder] = useState(false);
+  const [orderActionFeedback, setOrderActionFeedback] = useState<{
+    type: "success" | "error";
+    message: string;
+  } | null>(null);
 
-  // --- FILTRES DU CATALOGUE ---
+  // --- FILTRES & ERREURS DU CATALOGUE ---
   const [productSearch, setProductSearch] = useState("");
   const [productCategoryFilter, setProductCategoryFilter] = useState("all");
   const [productFamilyFilter, setProductFamilyFilter] = useState("all");
   const [resetConfirm, setResetConfirm] = useState(false);
+  const [catalogError, setCatalogError] = useState<string | null>(null);
 
   // --- MODAL MAÎTRE PRODUIT (CRÉATION & ÉDITION) ---
   const [showProductModal, setShowProductModal] = useState(false);
@@ -203,6 +220,9 @@ export default function AdminDashboard() {
   const [pPreviewImage, setPPreviewImage] = useState<string | null>(null);
   const [isUploadingImage, setIsUploadingImage] = useState(false);
   const [uploadStatusMsg, setUploadStatusMsg] = useState<string | null>(null);
+  const [uploadError, setUploadError] = useState(false);
+  const [isSavingProduct, setIsSavingProduct] = useState(false);
+  const [productModalError, setProductModalError] = useState<string | null>(null);
 
   // --- ÉTAT GESTION TAXONOMIES (CATÉGORIES & FAMILLES) ---
   const [newCatName, setNewCatName] = useState("");
@@ -214,73 +234,102 @@ export default function AdminDashboard() {
   const [newFamDesc, setNewFamDesc] = useState("");
   const [editingFamId, setEditingFamId] = useState<string | null>(null);
   const [editingFamOldName, setEditingFamOldName] = useState<string>("");
+  const [taxonomyError, setTaxonomyError] = useState<string | null>(null);
 
-  // 1. Vérification session
+  // 1. Vérification réelle de la session administrateur côté serveur (cookie HttpOnly HMAC)
   useEffect(() => {
-    try {
-      const storedToken = sessionStorage.getItem("club_parfum_admin_token");
-      if (storedToken) {
-        setAdminToken(storedToken);
-        setIsAuthenticated(true);
-      }
-    } catch {
-      // Ignorer
-    } finally {
-      setIsCheckingAuth(false);
-    }
-  }, []);
+    let isMounted = true;
 
-  // 2. Chargement des commandes Supabase
-  useEffect(() => {
-    if (isSupabaseConfigured && supabase) {
-      supabase
-        .from("orders")
-        .select("*")
-        .order("created_at", { ascending: false })
-        .then(({ data, error }) => {
-          if (!error && data && data.length > 0) {
-            const mappedOrders: AdminOrder[] = data.map((row: any) => ({
-              id: row.order_number || row.id,
-              dbId: row.id,
-              date: row.date || new Date(row.created_at).toLocaleDateString("fr-FR"),
-              customer: row.customer_name || `${row.customer_first_name || ""} ${row.customer_last_name || ""}`.trim() || "Client",
-              email: row.customer_email,
-              phone: row.customer_phone,
-              items: Array.isArray(row.items)
-                ? row.items.map((it: any) => ({
-                    name: it.name,
-                    variant: it.variant,
-                    qty: Number(it.qty || 1),
-                    price: Number(it.price || 0),
-                  }))
-                : [],
-              shipping_method: row.shipping_method,
-              relay_point: row.relay_point,
-              address: row.address,
-              building: row.building,
-              digicode: row.digicode,
-              postal_code: row.postal_code,
-              city: row.city,
-              shipping_cost: Number(row.shipping_cost || 0),
-              total: Number(row.total || 0),
-              status: row.status || "pending",
-              tracking: row.tracking || "",
-            }));
-
-            setOrders(mappedOrders);
-          }
+    async function verifySession() {
+      try {
+        const res = await fetch("/api/admin/verify", {
+          method: "GET",
+          credentials: "include",
         });
+        if (!isMounted) return;
+        if (res.ok) {
+          const data = (await res.json()) as { authenticated?: boolean };
+          setIsAuthenticated(Boolean(data.authenticated));
+        } else {
+          setIsAuthenticated(false);
+        }
+      } catch {
+        if (isMounted) setIsAuthenticated(false);
+      } finally {
+        if (isMounted) setIsCheckingAuth(false);
+      }
     }
+
+    verifySession();
+
+    return () => {
+      isMounted = false;
+    };
   }, []);
 
-  // Synchronisation du modal de commande
+  // 2. Chargement sécurisé des commandes via l'API admin (uniquement si authentifié)
   useEffect(() => {
-    if (selectedOrder) {
-      setModalTracking(selectedOrder.tracking || "");
-      setModalStatus(selectedOrder.status || "pending");
-      setOrderActionFeedback(null);
+    if (!isAuthenticated) {
+      return;
     }
-  }, [selectedOrder]);
+
+    let isMounted = true;
+
+    async function loadOrders() {
+      setIsLoadingOrders(true);
+      setOrdersError(null);
+      try {
+        const res = await fetch("/api/admin/orders", {
+          method: "GET",
+          credentials: "include",
+        });
+
+        if (!isMounted) return;
+
+        if (res.status === 401) {
+          setIsAuthenticated(false);
+          setOrders([]);
+          return;
+        }
+
+        const data = (await res.json().catch(() => ({}))) as {
+          orders?: DbOrderRow[];
+          error?: string;
+        };
+
+        if (!res.ok) {
+          setOrdersError(data.error || "Impossible de charger les commandes.");
+          return;
+        }
+
+        const mappedOrders = Array.isArray(data.orders)
+          ? data.orders.map(mapDbOrderToAdminOrder)
+          : [];
+        setOrders(mappedOrders);
+      } catch {
+        if (isMounted) {
+          setOrdersError("Erreur réseau lors du chargement des commandes.");
+        }
+      } finally {
+        if (isMounted) {
+          setIsLoadingOrders(false);
+        }
+      }
+    }
+
+    loadOrders();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [isAuthenticated]);
+
+  const openOrderModal = (order: AdminOrder) => {
+    setSelectedOrder(order);
+    setModalTracking(order.tracking || "");
+    setModalStatus(order.status || "pending");
+    setOrderActionFeedback(null);
+  };
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -295,19 +344,18 @@ export default function AdminDashboard() {
 
       const res = await fetch("/api/admin/verify", {
         method: "POST",
+        credentials: "include",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
       });
 
-      const data = await res.json();
-      if (res.ok && data.success && data.adminToken) {
+      const data = (await res.json().catch(() => ({}))) as {
+        success?: boolean;
+        error?: string;
+      };
+
+      if (res.ok && data.success) {
         setIsAuthenticated(true);
-        setAdminToken(data.adminToken);
-        try {
-          sessionStorage.setItem("club_parfum_admin_token", data.adminToken);
-        } catch {
-          // Ignorer
-        }
       } else {
         setAuthError(data.error || "Authentification refusée.");
       }
@@ -318,14 +366,26 @@ export default function AdminDashboard() {
     }
   };
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
+    try {
+      await fetch("/api/admin/verify", {
+        method: "DELETE",
+        credentials: "include",
+      });
+    } catch {
+      // Ignorer erreur réseau lors de la déconnexion
+    }
+
     try {
       sessionStorage.removeItem("club_parfum_admin_token");
     } catch {
       // Ignorer
     }
+
     setIsAuthenticated(false);
-    setAdminToken("");
+    setOrders([]);
+    setSelectedOrder(null);
+    setOrdersError(null);
     setAuthCode("");
     setAdminEmail("");
     setAdminPassword("");
@@ -365,55 +425,112 @@ export default function AdminDashboard() {
     });
   }, [orders, orderStatusFilter, orderSearch]);
 
-  // --- GESTION DES COMMANDES (SAUVEGARDE & SUPABASE) ---
+  // --- GESTION DES COMMANDES (API ADMIN SÉCURISÉE) ---
   const handleSaveOrderChanges = async (overrideStatus?: string) => {
     if (!selectedOrder) return;
     const newStatus = overrideStatus || modalStatus;
     const newTracking = modalTracking.trim();
 
-    // Mettre à jour en local
-    setOrders((prev) =>
-      prev.map((o) =>
-        o.id === selectedOrder.id || (o.dbId && o.dbId === selectedOrder.dbId)
-          ? { ...o, status: newStatus, tracking: newTracking }
-          : o
-      )
-    );
-    setSelectedOrder((prev) => (prev ? { ...prev, status: newStatus, tracking: newTracking } : null));
+    setIsSavingOrder(true);
+    setOrderActionFeedback(null);
 
-    // Mettre à jour dans Supabase
-    if (isSupabaseConfigured && supabase) {
-      try {
-        const query = supabase
-          .from("orders")
-          .update({ status: newStatus, tracking: newTracking });
+    try {
+      const res = await fetch("/api/admin/orders", {
+        method: "PATCH",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          id: selectedOrder.dbId,
+          order_number: selectedOrder.id,
+          status: newStatus,
+          tracking: newTracking,
+        }),
+      });
 
-        if (selectedOrder.dbId) {
-          await query.or(`id.eq.${selectedOrder.dbId},order_number.eq.${selectedOrder.id}`);
-        } else {
-          await query.eq("order_number", selectedOrder.id);
+      const data = (await res.json().catch(() => ({}))) as { error?: string };
+      if (!res.ok) {
+        if (res.status === 401) {
+          setIsAuthenticated(false);
+          setSelectedOrder(null);
+          return;
         }
-      } catch (err) {
-        console.error("Erreur mise à jour commande Supabase:", err);
+        setOrderActionFeedback({
+          type: "error",
+          message: data.error || "Impossible d'enregistrer les modifications de la commande.",
+        });
+        return;
       }
-    }
 
-    setOrderActionFeedback("Commande mise à jour avec succès !");
-    setTimeout(() => setOrderActionFeedback(null), 2500);
+      setOrders((prev) =>
+        prev.map((o) =>
+          o.id === selectedOrder.id || (o.dbId && o.dbId === selectedOrder.dbId)
+            ? { ...o, status: newStatus, tracking: newTracking }
+            : o
+        )
+      );
+      setModalStatus(newStatus);
+      setSelectedOrder((prev) =>
+        prev ? { ...prev, status: newStatus, tracking: newTracking } : null
+      );
+      setOrderActionFeedback({
+        type: "success",
+        message: "Commande mise à jour avec succès !",
+      });
+      setTimeout(() => setOrderActionFeedback(null), 2500);
+    } catch {
+      setOrderActionFeedback({
+        type: "error",
+        message: "Erreur réseau lors de la mise à jour de la commande.",
+      });
+    } finally {
+      setIsSavingOrder(false);
+    }
   };
 
-  const handleDeleteOrder = async (orderId: string) => {
-    if (!confirm("Voulez-vous vraiment supprimer cette commande ? Cette action est irréversible.")) return;
+  const handleDeleteOrder = async (order: AdminOrder) => {
+    if (!confirm("Voulez-vous vraiment supprimer cette commande ? Cette action est irréversible.")) {
+      return;
+    }
 
-    setOrders((prev) => prev.filter((o) => o.id !== orderId && o.dbId !== orderId));
-    setSelectedOrder(null);
+    setIsSavingOrder(true);
+    setOrderActionFeedback(null);
 
-    if (isSupabaseConfigured && supabase) {
-      try {
-        await supabase.from("orders").delete().or(`id.eq.${orderId},order_number.eq.${orderId}`);
-      } catch (err) {
-        console.error("Erreur suppression commande Supabase:", err);
+    try {
+      const res = await fetch("/api/admin/orders", {
+        method: "DELETE",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          id: order.dbId,
+          order_number: order.id,
+        }),
+      });
+
+      const data = (await res.json().catch(() => ({}))) as { error?: string };
+      if (!res.ok) {
+        if (res.status === 401) {
+          setIsAuthenticated(false);
+          setSelectedOrder(null);
+          return;
+        }
+        setOrderActionFeedback({
+          type: "error",
+          message: data.error || "Impossible de supprimer cette commande.",
+        });
+        return;
       }
+
+      setOrders((prev) =>
+        prev.filter((o) => o.id !== order.id && (!order.dbId || o.dbId !== order.dbId))
+      );
+      setSelectedOrder(null);
+    } catch {
+      setOrderActionFeedback({
+        type: "error",
+        message: "Erreur réseau lors de la suppression de la commande.",
+      });
+    } finally {
+      setIsSavingOrder(false);
     }
   };
 
@@ -486,7 +603,9 @@ export default function AdminDashboard() {
     setPImageUrl("");
     setPPreviewImage(null);
     setUploadStatusMsg(null);
+    setUploadError(false);
     setIsUploadingImage(false);
+    setProductModalError(null);
     setShowProductModal(true);
   };
 
@@ -519,7 +638,9 @@ export default function AdminDashboard() {
     setPImageUrl(prod.images[0] || "");
     setPPreviewImage(prod.images[0] || null);
     setUploadStatusMsg(null);
+    setUploadError(false);
     setIsUploadingImage(false);
+    setProductModalError(null);
     setShowProductModal(true);
   };
 
@@ -528,52 +649,44 @@ export default function AdminDashboard() {
     if (!file) return;
 
     setIsUploadingImage(true);
+    setUploadError(false);
     setUploadStatusMsg("Téléversement vers Supabase Cloud...");
 
-    // 1. Tentative de téléversement sécurisé vers l'API Supabase Storage avec authentification admin
     try {
       const formData = new FormData();
       formData.append("file", file);
 
-      const headers: Record<string, string> = {};
-      if (adminToken) {
-        headers["Authorization"] = `Bearer ${adminToken}`;
-        headers["x-admin-token"] = adminToken;
-      }
-
       const res = await fetch("/api/upload", {
         method: "POST",
-        headers,
+        credentials: "include",
         body: formData,
       });
 
-      if (res.ok) {
-        const data = await res.json();
-        if (data.url) {
-          setPPreviewImage(data.url);
-          setPImageUrl(data.url);
-          setUploadStatusMsg("Image hébergée sur le Cloud Supabase (CDN haute vitesse)");
-          setIsUploadingImage(false);
-          return;
-        }
-      } else {
-        const errData = await res.json().catch(() => null);
-        console.warn("Échec upload Supabase Storage, repli FileReader:", errData?.error);
-      }
-    } catch (err) {
-      console.warn("Erreur réseau vers /api/upload, repli FileReader:", err);
-    }
+      const data = (await res.json().catch(() => ({}))) as {
+        url?: string;
+        error?: string;
+      };
 
-    // 2. Repli de secours local avec FileReader pour ne jamais bloquer l'administrateur
-    const reader = new FileReader();
-    reader.onloadend = () => {
-      const result = reader.result as string;
-      setPPreviewImage(result);
-      setPImageUrl(result);
-      setUploadStatusMsg("Image chargée localement (mode hors-ligne)");
+      if (res.ok && data.url) {
+        setPPreviewImage(data.url);
+        setPImageUrl(data.url);
+        setUploadError(false);
+        setUploadStatusMsg("Image hébergée sur le Cloud Supabase (CDN haute vitesse)");
+      } else {
+        setUploadError(true);
+        setUploadStatusMsg(
+          data.error || "Échec du téléversement de l'image. Veuillez réessayer."
+        );
+      }
+    } catch {
+      setUploadError(true);
+      setUploadStatusMsg(
+        "Erreur réseau lors du téléversement de l'image. Veuillez réessayer."
+      );
+    } finally {
       setIsUploadingImage(false);
-    };
-    reader.readAsDataURL(file);
+      e.target.value = "";
+    }
   };
 
   // Plantilles de variantes
@@ -609,6 +722,9 @@ export default function AdminDashboard() {
     e.preventDefault();
     if (!pName.trim()) return;
 
+    setProductModalError(null);
+    setIsSavingProduct(true);
+
     const matchedCat = categories.find((c) => c.id === pCategoryId);
     const categoryName = matchedCat?.name || "Bougies Parfumées";
 
@@ -643,14 +759,14 @@ export default function AdminDashboard() {
         ? Math.min(...pVariants.map((v) => Number(v.price)).filter((p) => !isNaN(p) && p > 0))
         : 24.9;
 
+    const generatedSlug = slugify(pName) || `creation-${Date.now()}`;
+
     const productPayload: Product = {
       id: editingProduct ? editingProduct.id : `prod-${Date.now()}`,
       category_id: pCategoryId,
       category_name: categoryName,
       name: pName.trim(),
-      slug: editingProduct
-        ? editingProduct.slug
-        : pName.toLowerCase().trim().replace(/[^a-z0-9]+/g, "-"),
+      slug: editingProduct ? editingProduct.slug : generatedSlug,
       description: pDesc.trim() || "Création de haute parfumerie de Grasse.",
       scent_notes: splitNotes.length > 0 ? splitNotes : ["Essences de Grasse"],
       olfactory_family: pFamily as OlfactoryFamily,
@@ -668,77 +784,171 @@ export default function AdminDashboard() {
       variants: pVariants.length > 0 ? pVariants : undefined,
     };
 
-    if (editingProduct) {
-      await updateProduct(productPayload);
-    } else {
-      await addProduct(productPayload);
+    try {
+      if (editingProduct) {
+        await updateProduct(productPayload);
+      } else {
+        await addProduct(productPayload);
+      }
+      setShowProductModal(false);
+    } catch (err) {
+      setProductModalError(
+        err instanceof Error ? err.message : "Impossible d'enregistrer le produit."
+      );
+    } finally {
+      setIsSavingProduct(false);
     }
-
-    setShowProductModal(false);
   };
 
   const handleResetCatalog = async () => {
-    await resetCatalog();
-    setResetConfirm(true);
-    setTimeout(() => setResetConfirm(false), 2500);
+    setCatalogError(null);
+    try {
+      await resetCatalog();
+      setResetConfirm(true);
+      setTimeout(() => setResetConfirm(false), 2500);
+    } catch (err) {
+      setCatalogError(
+        err instanceof Error ? err.message : "Impossible de réinitialiser le catalogue."
+      );
+    }
+  };
+
+  const handleToggleProductStock = async (productId: string) => {
+    setCatalogError(null);
+    try {
+      await toggleStock(productId);
+    } catch (err) {
+      setCatalogError(
+        err instanceof Error ? err.message : "Impossible de modifier la disponibilité."
+      );
+    }
+  };
+
+  const handleToggleVariantStock = async (productId: string, variantId: string) => {
+    setCatalogError(null);
+    try {
+      await toggleVariantStock(productId, variantId);
+    } catch (err) {
+      setCatalogError(
+        err instanceof Error ? err.message : "Impossible de modifier le stock de ce format."
+      );
+    }
+  };
+
+  const handleDeleteProduct = async (prod: Product) => {
+    if (!confirm(`Supprimer définitivement "${prod.name}" ?`)) return;
+    setCatalogError(null);
+    try {
+      await deleteProduct(prod.id);
+    } catch (err) {
+      setCatalogError(
+        err instanceof Error ? err.message : "Impossible de supprimer ce produit."
+      );
+    }
   };
 
   // --- ACTIONS CATÉGORIES ---
   const handleSaveCategory = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newCatName.trim()) return;
+    setTaxonomyError(null);
 
-    if (editingCatId) {
-      const existing = categories.find((c) => c.id === editingCatId);
-      if (existing) {
-        await updateCategory({
-          ...existing,
+    const cleanSlug = slugify(newCatName) || `categorie-${Date.now()}`;
+
+    try {
+      if (editingCatId) {
+        const existing = categories.find((c) => c.id === editingCatId);
+        if (existing) {
+          await updateCategory({
+            ...existing,
+            name: newCatName.trim(),
+            slug: cleanSlug,
+            description: newCatDesc.trim(),
+          });
+        }
+        setEditingCatId(null);
+      } else {
+        await addCategory({
           name: newCatName.trim(),
-          slug: newCatName.toLowerCase().trim().replace(/[^a-z0-9]+/g, "-"),
+          slug: cleanSlug,
           description: newCatDesc.trim(),
         });
       }
-      setEditingCatId(null);
-    } else {
-      await addCategory({
-        name: newCatName.trim(),
-        slug: newCatName.toLowerCase().trim().replace(/[^a-z0-9]+/g, "-"),
-        description: newCatDesc.trim(),
-      });
-    }
 
-    setNewCatName("");
-    setNewCatDesc("");
+      setNewCatName("");
+      setNewCatDesc("");
+    } catch (err) {
+      setTaxonomyError(
+        err instanceof Error ? err.message : "Impossible d'enregistrer la catégorie."
+      );
+    }
+  };
+
+  const handleDeleteCategory = async (catId: string, catName: string, productCount: number) => {
+    if (productCount > 0) {
+      setTaxonomyError(
+        `Attention : ${productCount} produit(s) sont rattachés à "${catName}". Veuillez les réassigner avant suppression.`
+      );
+      return;
+    }
+    if (!confirm(`Supprimer la catégorie "${catName}" ?`)) return;
+    setTaxonomyError(null);
+    try {
+      await deleteCategory(catId);
+    } catch (err) {
+      setTaxonomyError(
+        err instanceof Error ? err.message : "Impossible de supprimer la catégorie."
+      );
+    }
   };
 
   // --- ACTIONS FAMILLES OLFACTIVES ---
   const handleSaveFamily = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newFamName.trim()) return;
+    setTaxonomyError(null);
 
-    if (editingFamId) {
-      await updateOlfactoryFamily(
-        {
-          id: editingFamId,
+    try {
+      if (editingFamId) {
+        await updateOlfactoryFamily(
+          {
+            id: editingFamId,
+            name: newFamName.trim(),
+            mood: newFamMood.trim() || "Accord Signature de Grasse",
+            description: newFamDesc.trim(),
+          },
+          editingFamOldName
+        );
+        setEditingFamId(null);
+        setEditingFamOldName("");
+      } else {
+        await addOlfactoryFamily({
           name: newFamName.trim(),
           mood: newFamMood.trim() || "Accord Signature de Grasse",
           description: newFamDesc.trim(),
-        },
-        editingFamOldName
-      );
-      setEditingFamId(null);
-      setEditingFamOldName("");
-    } else {
-      await addOlfactoryFamily({
-        name: newFamName.trim(),
-        mood: newFamMood.trim() || "Accord Signature de Grasse",
-        description: newFamDesc.trim(),
-      });
-    }
+        });
+      }
 
-    setNewFamName("");
-    setNewFamMood("");
-    setNewFamDesc("");
+      setNewFamName("");
+      setNewFamMood("");
+      setNewFamDesc("");
+    } catch (err) {
+      setTaxonomyError(
+        err instanceof Error ? err.message : "Impossible d'enregistrer la famille olfactive."
+      );
+    }
+  };
+
+  const handleDeleteFamily = async (famId: string, famName: string) => {
+    if (!confirm(`Supprimer la famille "${famName}" ?`)) return;
+    setTaxonomyError(null);
+    try {
+      await deleteOlfactoryFamily(famId);
+    } catch (err) {
+      setTaxonomyError(
+        err instanceof Error ? err.message : "Impossible de supprimer la famille olfactive."
+      );
+    }
   };
 
   // Écran d'attente d'hydratation
@@ -1153,14 +1363,35 @@ export default function AdminDashboard() {
               </div>
             </div>
 
+            {/* Erreur chargement commandes */}
+            {ordersError && (
+              <div className="p-4 rounded-xl bg-rose-50 border border-rose-200 text-rose-800 text-xs sm:text-sm flex items-center gap-2.5">
+                <AlertCircle className="w-4 h-4 shrink-0 text-rose-600" />
+                <span>{ordersError}</span>
+              </div>
+            )}
+
             {/* Liste des commandes sous forme de cartes d'expédition riches */}
-            {filteredOrders.length > 0 ? (
+            {isLoadingOrders ? (
+              <div className="text-center py-16 bg-white rounded-2xl border border-[#E7E2DA] p-8 space-y-3">
+                <Loader2 className="w-6 h-6 animate-spin text-[#A16207] mx-auto" />
+                <p className="text-sm text-[#57534E]">Chargement des commandes...</p>
+              </div>
+            ) : orders.length === 0 ? (
+              <div className="text-center py-16 bg-white rounded-2xl border border-[#E7E2DA] p-8 space-y-3">
+                <p className="font-serif text-2xl text-[#1C1917]">
+                  Aucune commande enregistrée pour le moment
+                </p>
+                <p className="text-sm text-[#57534E]">
+                  Les nouvelles commandes validées sur la boutique apparaîtront ici automatiquement.
+                </p>
+              </div>
+            ) : filteredOrders.length > 0 ? (
               <div className="space-y-4">
                 {filteredOrders.map((order) => {
                   const isPending = order.status === "pending";
                   const isShipped = order.status === "shipped";
                   const isDelivered = order.status === "delivered";
-                  const isCancelled = order.status === "cancelled";
 
                   return (
                     <div
@@ -1192,11 +1423,6 @@ export default function AdminDashboard() {
                               ? "Livrée"
                               : "Annulée"}
                           </span>
-                          {order.dbId?.startsWith("ord-demo") && (
-                            <span className="px-2 py-0.5 rounded-md text-[11px] font-medium bg-[#F2EFE9] text-[#78716C] border border-[#E7E2DA]">
-                              Mode Démo / Exemple
-                            </span>
-                          )}
                         </div>
 
                         <div className="flex items-center gap-2">
@@ -1212,7 +1438,7 @@ export default function AdminDashboard() {
 
                           <button
                             type="button"
-                            onClick={() => setSelectedOrder(order)}
+                            onClick={() => openOrderModal(order)}
                             className="inline-flex items-center gap-1.5 px-4 py-1.5 rounded-xl text-xs font-semibold bg-[#1C1917] hover:bg-[#A16207] text-white transition shadow-xs cursor-pointer"
                           >
                             <span>Gérer / Expédier</span>
@@ -1306,6 +1532,13 @@ export default function AdminDashboard() {
         {/* ============================================================ */}
         {activeTab === "products" && (
           <div className="space-y-6">
+            {catalogError && (
+              <div className="p-4 rounded-xl bg-rose-50 border border-rose-200 text-rose-800 text-xs sm:text-sm flex items-center gap-2.5">
+                <AlertCircle className="w-4 h-4 shrink-0 text-rose-600" />
+                <span>{catalogError}</span>
+              </div>
+            )}
+
             {/* Barre d'outils du catalogue */}
             <div className="bg-white p-4 sm:p-5 rounded-2xl border border-[#E7E2DA] shadow-xs flex flex-col sm:flex-row gap-4 items-stretch sm:items-center justify-between">
               <div className="flex flex-wrap items-center gap-3 flex-1">
@@ -1437,7 +1670,7 @@ export default function AdminDashboard() {
                             <button
                               key={v.id}
                               type="button"
-                              onClick={() => toggleVariantStock(prod.id, v.id)}
+                              onClick={() => handleToggleVariantStock(prod.id, v.id)}
                               className={`px-3 py-1.5 rounded-xl text-xs font-medium border transition cursor-pointer flex items-center gap-1.5 ${
                                 v.in_stock
                                   ? "bg-white text-[#1C1917] border-[#E7E2DA] hover:border-[#1C1917] shadow-2xs"
@@ -1463,7 +1696,7 @@ export default function AdminDashboard() {
                     <div className="pt-3 border-t border-[#F2EFE9] flex items-center justify-between gap-3">
                       <button
                         type="button"
-                        onClick={() => toggleStock(prod.id)}
+                        onClick={() => handleToggleProductStock(prod.id)}
                         className={`px-3.5 py-1.5 rounded-xl text-xs font-semibold uppercase tracking-wider transition cursor-pointer border ${
                           prod.is_active
                             ? "bg-emerald-50 text-emerald-800 border-emerald-200 hover:bg-emerald-100"
@@ -1485,11 +1718,7 @@ export default function AdminDashboard() {
 
                         <button
                           type="button"
-                          onClick={() => {
-                            if (confirm(`Supprimer définitivement "${prod.name}" ?`)) {
-                              deleteProduct(prod.id);
-                            }
-                          }}
+                          onClick={() => handleDeleteProduct(prod)}
                           className="p-1.5 rounded-xl text-red-600 hover:bg-red-50 transition cursor-pointer"
                           title="Supprimer ce produit"
                         >
@@ -1508,7 +1737,15 @@ export default function AdminDashboard() {
         {/* PESTAÑA 3 : CATÉGORIES & FAMILLES OLFACTIVES (TAXONOMÍAS) */}
         {/* ============================================================ */}
         {activeTab === "taxonomies" && (
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+          <div className="space-y-6">
+            {taxonomyError && (
+              <div className="p-4 rounded-xl bg-rose-50 border border-rose-200 text-rose-800 text-xs sm:text-sm flex items-center gap-2.5">
+                <AlertCircle className="w-4 h-4 shrink-0 text-rose-600" />
+                <span>{taxonomyError}</span>
+              </div>
+            )}
+
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
             {/* COLONNE 1 : CATÉGORIES */}
             <div className="bg-white p-6 rounded-2xl border border-[#E7E2DA] shadow-xs space-y-6">
               <div>
@@ -1612,15 +1849,7 @@ export default function AdminDashboard() {
 
                         <button
                           type="button"
-                          onClick={() => {
-                            if (count > 0) {
-                              alert(`Attention : ${count} produit(s) sont rattachés à cette catégorie. Veuillez les réassigner avant suppression.`);
-                              return;
-                            }
-                            if (confirm(`Supprimer la catégorie "${cat.name}" ?`)) {
-                              deleteCategory(cat.id);
-                            }
-                          }}
+                          onClick={() => handleDeleteCategory(cat.id, cat.name, count)}
                           className="p-1.5 text-red-600 hover:bg-red-50 rounded-lg transition cursor-pointer"
                           title="Supprimer"
                         >
@@ -1763,11 +1992,7 @@ export default function AdminDashboard() {
 
                         <button
                           type="button"
-                          onClick={() => {
-                            if (confirm(`Supprimer la famille "${fam.name}" ?`)) {
-                              deleteOlfactoryFamily(fam.id);
-                            }
-                          }}
+                          onClick={() => handleDeleteFamily(fam.id, fam.name)}
                           className="p-1.5 text-red-600 hover:bg-red-50 rounded-lg transition cursor-pointer"
                           title="Supprimer"
                         >
@@ -1778,6 +2003,7 @@ export default function AdminDashboard() {
                   );
                 })}
               </div>
+            </div>
             </div>
           </div>
         )}
@@ -1799,11 +2025,6 @@ export default function AdminDashboard() {
                   <h3 className="font-serif text-2xl font-bold text-[#1C1917]">
                     Commande #{selectedOrder.id}
                   </h3>
-                  {selectedOrder.dbId?.startsWith("ord-demo") && (
-                    <span className="px-2 py-0.5 rounded-md text-[11px] font-medium bg-[#F2EFE9] text-[#78716C] border border-[#E7E2DA]">
-                      Mode Démo / Exemple
-                    </span>
-                  )}
                 </div>
                 <p className="text-xs text-[#57534E]">{selectedOrder.date}</p>
               </div>
@@ -1831,9 +2052,19 @@ export default function AdminDashboard() {
 
             {/* Notification de mise à jour */}
             {orderActionFeedback && (
-              <div className="p-3 bg-emerald-50 border border-emerald-200 text-emerald-800 rounded-xl text-xs flex items-center gap-2">
-                <Check className="w-4 h-4" />
-                <span>{orderActionFeedback}</span>
+              <div
+                className={`p-3 border rounded-xl text-xs flex items-center gap-2 ${
+                  orderActionFeedback.type === "error"
+                    ? "bg-rose-50 border-rose-200 text-rose-800"
+                    : "bg-emerald-50 border-emerald-200 text-emerald-800"
+                }`}
+              >
+                {orderActionFeedback.type === "error" ? (
+                  <AlertCircle className="w-4 h-4 shrink-0" />
+                ) : (
+                  <Check className="w-4 h-4 shrink-0" />
+                )}
+                <span>{orderActionFeedback.message}</span>
               </div>
             )}
 
@@ -1927,16 +2158,18 @@ export default function AdminDashboard() {
                 <div className="flex flex-wrap gap-2 pt-2">
                   <button
                     type="button"
+                    disabled={isSavingOrder}
                     onClick={() => handleSaveOrderChanges()}
-                    className="px-4 py-2 rounded-xl bg-[#1C1917] hover:bg-[#A16207] text-white text-xs font-semibold uppercase tracking-wider transition cursor-pointer shadow-xs"
+                    className="px-4 py-2 rounded-xl bg-[#1C1917] hover:bg-[#A16207] disabled:opacity-50 text-white text-xs font-semibold uppercase tracking-wider transition cursor-pointer shadow-xs"
                   >
-                    Enregistrer les modifications
+                    {isSavingOrder ? "Enregistrement..." : "Enregistrer les modifications"}
                   </button>
 
                   <button
                     type="button"
+                    disabled={isSavingOrder}
                     onClick={() => handleSaveOrderChanges("shipped")}
-                    className="px-4 py-2 rounded-xl bg-blue-700 hover:bg-blue-800 text-white text-xs font-semibold uppercase tracking-wider transition cursor-pointer shadow-xs flex items-center gap-1.5"
+                    className="px-4 py-2 rounded-xl bg-blue-700 hover:bg-blue-800 disabled:opacity-50 text-white text-xs font-semibold uppercase tracking-wider transition cursor-pointer shadow-xs flex items-center gap-1.5"
                   >
                     <Truck className="w-3.5 h-3.5" />
                     <span>Enregistrer & Marquer Expédiée</span>
@@ -1958,8 +2191,9 @@ export default function AdminDashboard() {
                 <span className="text-[#57534E]">Suppression réservée aux commandes tests</span>
                 <button
                   type="button"
-                  onClick={() => handleDeleteOrder(selectedOrder.id)}
-                  className="text-red-600 hover:text-red-800 underline font-medium cursor-pointer"
+                  disabled={isSavingOrder}
+                  onClick={() => handleDeleteOrder(selectedOrder)}
+                  className="text-red-600 hover:text-red-800 disabled:opacity-50 underline font-medium cursor-pointer"
                 >
                   Supprimer définitivement cette commande
                 </button>
@@ -1996,6 +2230,13 @@ export default function AdminDashboard() {
             </div>
 
             <form onSubmit={handleSaveProduct} className="space-y-6 text-sm">
+              {productModalError && (
+                <div className="p-3.5 rounded-xl bg-rose-50 border border-rose-200 text-rose-800 text-xs flex items-center gap-2">
+                  <AlertCircle className="w-4 h-4 shrink-0 text-rose-600" />
+                  <span>{productModalError}</span>
+                </div>
+              )}
+
               {/* 1. DONNÉES PRINCIPALES */}
               <div className="space-y-4">
                 <h4 className="font-semibold text-sm text-[#1C1917] uppercase tracking-wider text-xs text-[#A16207]">
@@ -2357,11 +2598,15 @@ export default function AdminDashboard() {
                     className={`p-2.5 rounded-lg border text-xs flex items-center gap-2 ${
                       isUploadingImage
                         ? "bg-amber-50 border-amber-200 text-amber-900"
+                        : uploadError
+                        ? "bg-rose-50 border-rose-200 text-rose-800"
                         : "bg-emerald-50 border-emerald-200 text-emerald-800"
                     }`}
                   >
                     {isUploadingImage ? (
                       <Loader2 className="w-3.5 h-3.5 animate-spin text-[#A16207] shrink-0" />
+                    ) : uploadError ? (
+                      <AlertCircle className="w-3.5 h-3.5 text-rose-600 shrink-0" />
                     ) : (
                       <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
                     )}
@@ -2372,10 +2617,12 @@ export default function AdminDashboard() {
                 {(pPreviewImage || pImageUrl) && (
                   <div className="flex items-start gap-3">
                     <div className="relative w-28 h-28 rounded-xl overflow-hidden border border-[#E7E2DA] shadow-xs group shrink-0">
-                      <img
+                      <Image
                         src={pPreviewImage || pImageUrl}
                         alt="Prévisualisation"
-                        className="w-full h-full object-cover"
+                        fill
+                        className="object-cover"
+                        unoptimized
                       />
                       <button
                         type="button"
@@ -2383,6 +2630,7 @@ export default function AdminDashboard() {
                           setPImageUrl("");
                           setPPreviewImage(null);
                           setUploadStatusMsg(null);
+                          setUploadError(false);
                         }}
                         className="absolute top-1 right-1 bg-black/60 text-white rounded-full p-1 hover:bg-black transition cursor-pointer"
                         title="Supprimer la photo"
@@ -2405,6 +2653,7 @@ export default function AdminDashboard() {
               <div className="pt-4 border-t border-[#F2EFE9] flex justify-end gap-3">
                 <button
                   type="button"
+                  disabled={isSavingProduct}
                   onClick={() => setShowProductModal(false)}
                   className="px-5 py-2.5 rounded-xl border border-[#E7E2DA] text-sm text-[#57534E] hover:bg-[#F2EFE9] transition"
                 >
@@ -2413,9 +2662,14 @@ export default function AdminDashboard() {
 
                 <button
                   type="submit"
-                  className="px-6 py-2.5 bg-[#1C1917] hover:bg-[#A16207] text-white text-sm font-semibold rounded-xl uppercase tracking-wider transition cursor-pointer shadow-md"
+                  disabled={isSavingProduct || isUploadingImage}
+                  className="px-6 py-2.5 bg-[#1C1917] hover:bg-[#A16207] disabled:opacity-50 text-white text-sm font-semibold rounded-xl uppercase tracking-wider transition cursor-pointer shadow-md"
                 >
-                  {editingProduct ? "Mettre à jour le produit" : "Enregistrer et publier en boutique"}
+                  {isSavingProduct
+                    ? "Enregistrement..."
+                    : editingProduct
+                    ? "Mettre à jour le produit"
+                    : "Enregistrer et publier en boutique"}
                 </button>
               </div>
             </form>
