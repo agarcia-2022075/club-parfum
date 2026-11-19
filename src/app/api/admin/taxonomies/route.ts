@@ -204,13 +204,30 @@ export async function PATCH(request: NextRequest) {
       const moodRaw = typeof body.mood === "string" ? body.mood.trim() : "";
       const mood = moodRaw || "Accord Signature de Grasse";
       const description = typeof body.description === "string" ? body.description.trim() : "";
-      const oldName = typeof body.oldName === "string" ? body.oldName.trim() : "";
 
       if (!id || !name) {
         return NextResponse.json(
           { error: "Identifiant et nom de la famille olfactive requis." },
           { status: 400 }
         );
+      }
+
+      const { data: existingFam, error: existingFamError } = await supabaseAdmin
+        .from("olfactory_families")
+        .select("id, name")
+        .eq("id", id)
+        .maybeSingle();
+
+      if (existingFamError) {
+        console.error("Erreur lecture famille olfactive Supabase:", existingFamError);
+        return NextResponse.json(
+          { error: `Impossible de vérifier la famille olfactive : ${existingFamError.message}` },
+          { status: 500 }
+        );
+      }
+
+      if (!existingFam) {
+        return NextResponse.json({ error: "Famille olfactive introuvable." }, { status: 404 });
       }
 
       const { data: updatedFam, error: famError } = await supabaseAdmin
@@ -238,17 +255,18 @@ export async function PATCH(request: NextRequest) {
         return NextResponse.json({ error: "Famille olfactive introuvable." }, { status: 404 });
       }
 
-      if (oldName && oldName !== name) {
-        const { error: prodUpdateError } = await supabaseAdmin
+      // La propagation vers products.olfactory_family et customer_profiles.favorite_family
+      // est assurée automatiquement par ON UPDATE CASCADE sur les clés étrangères.
+      if (existingFam.name !== name) {
+        const { error: prodTouchError } = await supabaseAdmin
           .from("products")
-          .update({ olfactory_family: name, updated_at: new Date().toISOString() })
-          .eq("olfactory_family", oldName);
+          .update({ updated_at: new Date().toISOString() })
+          .eq("olfactory_family", name);
 
-        if (prodUpdateError) {
-          console.error("Erreur propagation famille olfactive aux produits:", prodUpdateError);
-          return NextResponse.json(
-            { error: "Famille modifiée, mais échec de propagation aux produits." },
-            { status: 500 }
+        if (prodTouchError) {
+          console.warn(
+            "Avertissement mise à jour updated_at produits après renommage famille:",
+            prodTouchError.message
           );
         }
       }
@@ -348,6 +366,46 @@ export async function DELETE(request: NextRequest) {
       return NextResponse.json({ success: true }, { status: 200 });
     }
 
+    const { data: family, error: familyLookupError } = await supabaseAdmin
+      .from("olfactory_families")
+      .select("id, name")
+      .eq("id", id)
+      .maybeSingle();
+
+    if (familyLookupError) {
+      console.error("Erreur recherche famille olfactive Supabase:", familyLookupError);
+      return NextResponse.json(
+        { error: "Impossible de vérifier cette famille olfactive." },
+        { status: 500 }
+      );
+    }
+
+    if (!family) {
+      return NextResponse.json({ error: "Famille olfactive introuvable." }, { status: 404 });
+    }
+
+    const { count: linkedProductsCount, error: countError } = await supabaseAdmin
+      .from("products")
+      .select("id", { count: "exact", head: true })
+      .eq("olfactory_family", family.name);
+
+    if (countError) {
+      console.error("Erreur vérification produits liés à la famille olfactive:", countError);
+      return NextResponse.json(
+        { error: "Impossible de vérifier les produits associés à cette famille olfactive." },
+        { status: 500 }
+      );
+    }
+
+    if ((linkedProductsCount ?? 0) > 0) {
+      return NextResponse.json(
+        {
+          error: `Impossible de supprimer cette famille olfactive : ${linkedProductsCount} produit(s) y sont encore rattachés.`,
+        },
+        { status: 409 }
+      );
+    }
+
     const { data, error } = await supabaseAdmin
       .from("olfactory_families")
       .delete()
@@ -356,6 +414,15 @@ export async function DELETE(request: NextRequest) {
 
     if (error) {
       console.error("Erreur suppression famille olfactive Supabase:", error);
+      if (error.code === "23503") {
+        return NextResponse.json(
+          {
+            error:
+              "Impossible de supprimer cette famille olfactive : des produits y sont encore rattachés.",
+          },
+          { status: 409 }
+        );
+      }
       return NextResponse.json(
         { error: "Impossible de supprimer cette famille olfactive." },
         { status: 500 }

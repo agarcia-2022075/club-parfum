@@ -3,7 +3,7 @@ import { createServerAuthClient, getSupabaseAdmin } from "@/lib/supabase";
 import { getStripe } from "@/lib/stripe";
 import { STORE_CONFIG } from "@/lib/store-config";
 import { SHIPPING_METHODS } from "@/data/mock-data";
-import { FREE_SHIPPING_THRESHOLD, OrderItem } from "@/types/store";
+import { FREE_SHIPPING_THRESHOLD, OrderItem, OrderLineRecord } from "@/types/store";
 
 interface CheckoutItemInput {
   productId?: unknown;
@@ -391,6 +391,34 @@ export async function POST(request: NextRequest) {
         { error: "Impossible d'enregistrer la commande avant le paiement." },
         { status: 500 }
       );
+    }
+
+    const orderItemRows: OrderLineRecord[] = resolvedLines.map((line, idx) => ({
+      id: `${orderId}-item-${idx + 1}`,
+      order_id: orderId,
+      product_id: line.orderItem.product_id ?? null,
+      variant_id: line.orderItem.variant_id ?? null,
+      sku: line.orderItem.sku || "",
+      product_name: line.orderItem.name,
+      variant_label: line.orderItem.variant,
+      unit_price: line.orderItem.price,
+      quantity: line.orderItem.qty,
+      total_price: Number((line.orderItem.price * line.orderItem.qty).toFixed(2)),
+    }));
+
+    if (orderItemRows.length > 0) {
+      const { error: orderItemsError } = await supabaseAdmin
+        .from("order_items")
+        .insert(orderItemRows);
+
+      if (orderItemsError) {
+        console.error("Erreur insertion lignes order_items avant Stripe:", orderItemsError);
+        await supabaseAdmin.from("orders").delete().eq("id", orderId);
+        return NextResponse.json(
+          { error: "Impossible d'enregistrer le détail des articles de la commande." },
+          { status: 500 }
+        );
+      }
     }
 
     // 7. Création de la session Stripe Checkout

@@ -110,6 +110,38 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // Recherche de la commande correspondante (insensible à la casse) pour lier order_id et vérifier l'e-mail
+    const escapedOrderNumber = orderNumber.replace(/[\\%_]/g, "\\$&");
+    const { data: candidateOrders, error: orderLookupError } = await supabaseAdmin
+      .from("orders")
+      .select("id, order_number, customer_email")
+      .ilike("order_number", escapedOrderNumber)
+      .limit(5);
+
+    if (orderLookupError) {
+      console.error("Erreur recherche commande pour rétractation:", orderLookupError);
+      return NextResponse.json(
+        { error: "Impossible de vérifier votre commande actuellement." },
+        { status: 500 }
+      );
+    }
+
+    const matchedOrder = (candidateOrders || []).find(
+      (o) =>
+        typeof o.order_number === "string" &&
+        o.order_number.trim().toLowerCase() === orderNumber.toLowerCase()
+    );
+
+    if (matchedOrder) {
+      const orderEmail = (matchedOrder.customer_email || "").trim().toLowerCase();
+      if (orderEmail !== customerEmail) {
+        return NextResponse.json(
+          { error: "L'adresse e-mail renseignée ne correspond pas à cette commande." },
+          { status: 400 }
+        );
+      }
+    }
+
     const year = new Date().getFullYear();
     const reference = `RET-${year}-${Date.now().toString().slice(-6)}`;
     const id = `ret-${Date.now()}`;
@@ -117,6 +149,7 @@ export async function POST(request: NextRequest) {
     const { error: insertError } = await supabaseAdmin.from("withdrawal_requests").insert({
       id,
       reference,
+      order_id: matchedOrder ? matchedOrder.id : null,
       order_number: orderNumber,
       customer_name: customerName,
       customer_email: customerEmail,

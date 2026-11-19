@@ -91,13 +91,29 @@ export interface CustomerProfile {
 }
 
 export interface OrderItem {
-  product_id?: string;
-  variant_id?: string;
+  id?: string;
+  order_id?: string;
+  product_id?: string | null;
+  variant_id?: string | null;
   sku?: string;
   name: string;
   variant: string;
   qty: number;
   price: number;
+}
+
+export interface OrderLineRecord {
+  id: string;
+  order_id: string;
+  product_id: string | null;
+  variant_id: string | null;
+  sku: string;
+  product_name: string;
+  variant_label: string;
+  unit_price: number;
+  quantity: number;
+  total_price: number;
+  created_at?: string;
 }
 
 export interface CustomerOrder {

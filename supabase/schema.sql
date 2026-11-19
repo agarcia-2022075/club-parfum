@@ -8,9 +8,9 @@ CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 
 -- 2. SUPPRESSION PRÉVENTIVE (Optionnelle, pour réinitialisation propre)
 DROP TABLE IF EXISTS withdrawal_requests CASCADE;
-DROP TABLE IF EXISTS customer_profiles CASCADE;
 DROP TABLE IF EXISTS order_items CASCADE;
 DROP TABLE IF EXISTS orders CASCADE;
+DROP TABLE IF EXISTS customer_profiles CASCADE;
 DROP TABLE IF EXISTS product_variants CASCADE;
 DROP TABLE IF EXISTS products CASCADE;
 DROP TABLE IF EXISTS olfactory_families CASCADE;
@@ -38,7 +38,7 @@ CREATE TABLE IF NOT EXISTS olfactory_families (
 -- 4. TABLE PRODUITS (Avec Famille Olfactive, Facettes & Pyramide en 3 niveaux)
 CREATE TABLE products (
   id TEXT PRIMARY KEY,
-  category_id TEXT REFERENCES categories(id) ON DELETE SET NULL,
+  category_id TEXT,
   category_name TEXT NOT NULL,
   name TEXT NOT NULL,
   slug TEXT NOT NULL UNIQUE,
@@ -53,19 +53,28 @@ CREATE TABLE products (
   is_active BOOLEAN NOT NULL DEFAULT true,
   featured BOOLEAN NOT NULL DEFAULT false,
   created_at TIMESTAMPTZ DEFAULT NOW(),
-  updated_at TIMESTAMPTZ DEFAULT NOW()
+  updated_at TIMESTAMPTZ DEFAULT NOW(),
+  CONSTRAINT products_category_id_fkey
+    FOREIGN KEY (category_id) REFERENCES categories(id) ON UPDATE CASCADE ON DELETE SET NULL,
+  CONSTRAINT products_olfactory_family_fkey
+    FOREIGN KEY (olfactory_family) REFERENCES olfactory_families(name) ON UPDATE CASCADE ON DELETE RESTRICT,
+  CONSTRAINT products_base_price_check CHECK (base_price >= 0)
 );
 
 -- 5. TABLE VARIANTES DE PRODUITS (Formats, Contenances & Stock atomique)
 CREATE TABLE product_variants (
   id TEXT PRIMARY KEY,
-  product_id TEXT NOT NULL REFERENCES products(id) ON DELETE CASCADE,
+  product_id TEXT NOT NULL,
   sku TEXT NOT NULL,
   size_label TEXT NOT NULL,
   price NUMERIC(10,2) NOT NULL,
   in_stock BOOLEAN NOT NULL DEFAULT true,
-  stock_quantity INTEGER NOT NULL DEFAULT 25 CHECK (stock_quantity >= 0),
-  created_at TIMESTAMPTZ DEFAULT NOW()
+  stock_quantity INTEGER NOT NULL DEFAULT 25,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  CONSTRAINT product_variants_product_id_fkey
+    FOREIGN KEY (product_id) REFERENCES products(id) ON UPDATE CASCADE ON DELETE CASCADE,
+  CONSTRAINT product_variants_price_check CHECK (price >= 0),
+  CONSTRAINT product_variants_stock_quantity_check CHECK (stock_quantity >= 0)
 );
 
 -- 6. TABLE MODES DE LIVRAISON (France Métropolitaine)
@@ -79,13 +88,35 @@ CREATE TABLE shipping_methods (
   requires_relay_point BOOLEAN NOT NULL DEFAULT false,
   description TEXT NOT NULL,
   is_active BOOLEAN NOT NULL DEFAULT true,
-  created_at TIMESTAMPTZ DEFAULT NOW()
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  CONSTRAINT shipping_methods_price_check CHECK (price >= 0)
+);
+
+-- 6.1 TABLE PROFILS CLIENTS (Carnet d'adresses & Préférences Olfactives liés à Supabase Auth)
+CREATE TABLE IF NOT EXISTS customer_profiles (
+  id UUID PRIMARY KEY,
+  email TEXT NOT NULL,
+  first_name TEXT NOT NULL DEFAULT '',
+  last_name TEXT NOT NULL DEFAULT '',
+  phone TEXT DEFAULT '',
+  address TEXT DEFAULT '',
+  building TEXT DEFAULT '',
+  digicode TEXT DEFAULT '',
+  postal_code TEXT DEFAULT '',
+  city TEXT DEFAULT '',
+  favorite_family TEXT DEFAULT 'Orientale',
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW(),
+  CONSTRAINT customer_profiles_id_fkey
+    FOREIGN KEY (id) REFERENCES auth.users(id) ON DELETE CASCADE,
+  CONSTRAINT customer_profiles_favorite_family_fkey
+    FOREIGN KEY (favorite_family) REFERENCES olfactory_families(name) ON UPDATE CASCADE ON DELETE SET NULL
 );
 
 -- 7. TABLE COMMANDES (Format conforme logistique, Stripe & facturation française)
 CREATE TABLE orders (
   id TEXT PRIMARY KEY,
-  user_id UUID REFERENCES auth.users(id) ON DELETE SET NULL,
+  user_id UUID,
   order_number TEXT NOT NULL UNIQUE,
   date TEXT NOT NULL,
   customer_first_name TEXT NOT NULL,
@@ -93,7 +124,7 @@ CREATE TABLE orders (
   customer_name TEXT NOT NULL,
   customer_email TEXT NOT NULL,
   customer_phone TEXT NOT NULL,
-  shipping_method_id TEXT REFERENCES shipping_methods(id),
+  shipping_method_id TEXT,
   shipping_method TEXT NOT NULL,
   shipping_cost NUMERIC(10,2) NOT NULL DEFAULT 0.00,
   relay_point TEXT,
@@ -116,39 +147,63 @@ CREATE TABLE orders (
   cgv_accepted_at TIMESTAMPTZ DEFAULT NOW(),
   tracking TEXT DEFAULT '',
   items JSONB NOT NULL DEFAULT '[]'::jsonb,
-  created_at TIMESTAMPTZ DEFAULT NOW()
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  CONSTRAINT orders_user_id_fkey
+    FOREIGN KEY (user_id) REFERENCES auth.users(id) ON DELETE SET NULL,
+  CONSTRAINT orders_shipping_method_id_fkey
+    FOREIGN KEY (shipping_method_id) REFERENCES shipping_methods(id) ON UPDATE CASCADE ON DELETE SET NULL,
+  CONSTRAINT orders_amounts_check CHECK (subtotal >= 0 AND shipping_cost >= 0 AND total >= 0),
+  CONSTRAINT orders_status_check CHECK (status IN ('pending', 'shipped', 'delivered', 'cancelled')),
+  CONSTRAINT orders_payment_status_check CHECK (payment_status IN ('pending', 'paid', 'failed', 'expired', 'refunded'))
 );
 
--- 7.1 TABLE PROFILS CLIENTS (Carnet d'adresses & Préférences Olfactives liés à Supabase Auth)
-CREATE TABLE IF NOT EXISTS customer_profiles (
-  id UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
-  email TEXT NOT NULL,
-  first_name TEXT NOT NULL DEFAULT '',
-  last_name TEXT NOT NULL DEFAULT '',
-  phone TEXT DEFAULT '',
-  address TEXT DEFAULT '',
-  building TEXT DEFAULT '',
-  digicode TEXT DEFAULT '',
-  postal_code TEXT DEFAULT '',
-  city TEXT DEFAULT '',
-  favorite_family TEXT DEFAULT 'Orientale',
-  created_at TIMESTAMPTZ DEFAULT NOW(),
-  updated_at TIMESTAMPTZ DEFAULT NOW()
+-- 7.1 TABLE LIGNES DE COMMANDE NORMALISÉES (Lien relationnel Ventes <-> Catalogue)
+CREATE TABLE IF NOT EXISTS order_items (
+  id TEXT PRIMARY KEY,
+  order_id TEXT NOT NULL REFERENCES orders(id) ON UPDATE CASCADE ON DELETE CASCADE,
+  product_id TEXT REFERENCES products(id) ON UPDATE CASCADE ON DELETE SET NULL,
+  variant_id TEXT REFERENCES product_variants(id) ON UPDATE CASCADE ON DELETE SET NULL,
+  sku TEXT NOT NULL DEFAULT '',
+  product_name TEXT NOT NULL,
+  variant_label TEXT NOT NULL DEFAULT '',
+  unit_price NUMERIC(10,2) NOT NULL CHECK (unit_price >= 0),
+  quantity INTEGER NOT NULL CHECK (quantity > 0),
+  total_price NUMERIC(10,2) NOT NULL CHECK (total_price >= 0),
+  created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
 -- 7.2 TABLE DEMANDES DE RÉTRACTATION (Code de la consommation L.221-18)
 CREATE TABLE IF NOT EXISTS withdrawal_requests (
   id TEXT PRIMARY KEY,
   reference TEXT NOT NULL UNIQUE,
+  order_id TEXT,
   order_number TEXT NOT NULL,
   customer_name TEXT NOT NULL,
   customer_email TEXT NOT NULL,
   reason TEXT DEFAULT '',
   status TEXT NOT NULL DEFAULT 'received',
-  created_at TIMESTAMPTZ DEFAULT NOW()
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  CONSTRAINT withdrawal_requests_order_id_fkey
+    FOREIGN KEY (order_id) REFERENCES orders(id) ON UPDATE CASCADE ON DELETE SET NULL,
+  CONSTRAINT withdrawal_requests_status_check CHECK (status IN ('received', 'reviewing', 'approved', 'rejected', 'refunded'))
 );
 
--- 7.3 SÉQUENCES COMPTABLES SANS SAUTS & FONCTIONS RPC ATOMIQUES (SERVICE_ROLE UNIQUEMENT)
+-- 7.3 INDEX DE PERFORMANCE (Clés étrangères & recherches fréquentes)
+CREATE INDEX IF NOT EXISTS idx_products_category_id ON products(category_id);
+CREATE INDEX IF NOT EXISTS idx_products_olfactory_family ON products(olfactory_family);
+CREATE INDEX IF NOT EXISTS idx_products_is_active_featured ON products(is_active, featured);
+CREATE INDEX IF NOT EXISTS idx_product_variants_product_id ON product_variants(product_id);
+CREATE INDEX IF NOT EXISTS idx_orders_user_id ON orders(user_id);
+CREATE INDEX IF NOT EXISTS idx_orders_shipping_method_id ON orders(shipping_method_id);
+CREATE INDEX IF NOT EXISTS idx_orders_customer_email_lower ON orders(lower(customer_email));
+CREATE INDEX IF NOT EXISTS idx_orders_status_created_at ON orders(status, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_order_items_order_id ON order_items(order_id);
+CREATE INDEX IF NOT EXISTS idx_order_items_product_id ON order_items(product_id);
+CREATE INDEX IF NOT EXISTS idx_order_items_variant_id ON order_items(variant_id);
+CREATE INDEX IF NOT EXISTS idx_withdrawal_requests_order_id ON withdrawal_requests(order_id);
+CREATE INDEX IF NOT EXISTS idx_withdrawal_requests_order_number_lower ON withdrawal_requests(lower(order_number));
+
+-- 7.4 SÉQUENCES COMPTABLES SANS SAUTS & FONCTIONS RPC ATOMIQUES (SERVICE_ROLE UNIQUEMENT)
 CREATE SEQUENCE IF NOT EXISTS public.order_number_seq START WITH 1001;
 CREATE SEQUENCE IF NOT EXISTS public.invoice_number_seq START WITH 1;
 
@@ -216,6 +271,7 @@ ALTER TABLE products ENABLE ROW LEVEL SECURITY;
 ALTER TABLE product_variants ENABLE ROW LEVEL SECURITY;
 ALTER TABLE shipping_methods ENABLE ROW LEVEL SECURITY;
 ALTER TABLE orders ENABLE ROW LEVEL SECURITY;
+ALTER TABLE order_items ENABLE ROW LEVEL SECURITY;
 ALTER TABLE customer_profiles ENABLE ROW LEVEL SECURITY;
 ALTER TABLE withdrawal_requests ENABLE ROW LEVEL SECURITY;
 
@@ -253,6 +309,16 @@ DROP POLICY IF EXISTS "Insertion commande client anonyme" ON orders;
 -- 8.4 Consultation de commande propre: Si authentifié, le client ne voit que ses propres commandes
 CREATE POLICY "Lecture commandes propres client" ON orders
   FOR SELECT USING (auth.uid() = user_id);
+
+DROP POLICY IF EXISTS "Lecture lignes commandes propres client" ON order_items;
+CREATE POLICY "Lecture lignes commandes propres client" ON order_items
+  FOR SELECT USING (
+    EXISTS (
+      SELECT 1 FROM orders o
+      WHERE o.id = order_items.order_id
+        AND o.user_id = auth.uid()
+    )
+  );
 
 -- Note de sécurité Architecture:
 -- Le catalogue est en lecture publique (SELECT) pour tous.
