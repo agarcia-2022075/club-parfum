@@ -48,6 +48,9 @@ interface SafeOrderRow {
   date: string;
   customer_first_name: string | null;
   status: string;
+  payment_status?: string | null;
+  invoice_number?: string | null;
+  paid_at?: string | null;
   tracking: string | null;
   shipping_method: string;
   shipping_cost: number | string;
@@ -117,7 +120,7 @@ export async function POST(request: NextRequest) {
     const { data, error } = await supabaseAdmin
       .from("orders")
       .select(
-        "id, order_number, date, customer_first_name, status, tracking, shipping_method, shipping_cost, subtotal, total, items, postal_code, city, relay_point, created_at"
+        "id, order_number, date, customer_first_name, status, payment_status, invoice_number, paid_at, tracking, shipping_method, shipping_cost, subtotal, total, items, postal_code, city, relay_point, created_at"
       )
       .ilike("order_number", escapedOrderNumber)
       .ilike("customer_email", escapedEmail)
@@ -146,6 +149,9 @@ export async function POST(request: NextRequest) {
           date: data.date,
           customer_first_name: data.customer_first_name || "",
           status: data.status || "pending",
+          payment_status: data.payment_status || "pending",
+          invoice_number: data.invoice_number || null,
+          paid_at: data.paid_at || null,
           tracking: data.tracking || "",
           shipping_method: data.shipping_method,
           shipping_cost: Number(data.shipping_cost || 0),

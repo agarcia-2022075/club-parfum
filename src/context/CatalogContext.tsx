@@ -74,6 +74,7 @@ interface DbProductVariantRow {
   size_label: string;
   price: number | string;
   in_stock: boolean;
+  stock_quantity?: number | null;
 }
 
 interface DbProductRow {
@@ -279,13 +280,22 @@ export function CatalogProvider({ children }: { children: React.ReactNode }) {
                 is_active: item.is_active,
                 featured: Boolean(item.featured),
                 variants:
-                  item.product_variants?.map((v): ProductVariant => ({
-                    id: v.id,
-                    sku: v.sku,
-                    size_label: v.size_label,
-                    price: Number(v.price),
-                    in_stock: v.in_stock,
-                  })) || [],
+                  item.product_variants?.map((v): ProductVariant => {
+                    const qty =
+                      typeof v.stock_quantity === "number" && Number.isFinite(v.stock_quantity)
+                        ? Math.max(0, Math.floor(v.stock_quantity))
+                        : v.in_stock
+                          ? 25
+                          : 0;
+                    return {
+                      id: v.id,
+                      sku: v.sku,
+                      size_label: v.size_label,
+                      price: Number(v.price),
+                      in_stock: v.in_stock,
+                      stock_quantity: qty,
+                    };
+                  }) || [],
               };
             });
             setProducts(loadedProducts);
@@ -347,6 +357,7 @@ export function CatalogProvider({ children }: { children: React.ReactNode }) {
                   : "Flacon Vaporisateur 50 ml",
                 price: computedBasePrice,
                 in_stock: true,
+                stock_quantity: 25,
               },
             ],
     };
@@ -475,14 +486,24 @@ export function CatalogProvider({ children }: { children: React.ReactNode }) {
         throw new Error(await readApiError(res, "Impossible de modifier le stock de ce format."));
       }
 
+      const data = (await res.json()) as { in_stock?: boolean; stock_quantity?: number };
+      const finalInStock = typeof data.in_stock === "boolean" ? data.in_stock : targetNewStatus;
+
       setProducts((prev) =>
         prev.map((p) => {
           if (p.id !== productId || !p.variants) return p;
           return {
             ...p,
-            variants: p.variants.map((v) =>
-              v.id === variantId ? { ...v, in_stock: targetNewStatus } : v
-            ),
+            variants: p.variants.map((v) => {
+              if (v.id !== variantId) return v;
+              const nextQty =
+                typeof data.stock_quantity === "number" && Number.isFinite(data.stock_quantity)
+                  ? Math.max(0, Math.floor(data.stock_quantity))
+                  : finalInStock
+                    ? Math.max(1, v.stock_quantity || 25)
+                    : 0;
+              return { ...v, in_stock: finalInStock, stock_quantity: nextQty };
+            }),
           };
         })
       );

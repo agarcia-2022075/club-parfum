@@ -1,74 +1,165 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef, Suspense } from "react";
+import { useSearchParams } from "next/navigation";
+import Link from "next/link";
+import Image from "next/image";
 import { Header } from "@/components/Header";
 import { Footer } from "@/components/Footer";
+import { RelayPointPicker, type SelectedRelayPoint } from "@/components/RelayPointPicker";
 import { useCart } from "@/context/CartContext";
 import { useAuth } from "@/context/AuthContext";
 import { SHIPPING_METHODS } from "@/data/mock-data";
 import { formatPrice } from "@/lib/utils";
-import { FREE_SHIPPING_THRESHOLD, ShippingMethod } from "@/types/store";
+import { openPrintableInvoice } from "@/lib/store-config";
+import { supabase, isSupabaseConfigured } from "@/lib/supabase";
+import { FREE_SHIPPING_THRESHOLD, OrderItem, ShippingMethod } from "@/types/store";
 import {
-  ShieldCheck,
-  Truck,
   ArrowLeft,
   CheckCircle2,
   Lock,
-  CreditCard,
   Sparkles,
   AlertCircle,
   Loader2,
   User,
+  Printer,
 } from "lucide-react";
-import { supabase, isSupabaseConfigured } from "@/lib/supabase";
-import Image from "next/image";
-import Link from "next/link";
 
-export default function CheckoutPage() {
+interface CheckoutFormState {
+  firstName: string;
+  lastName: string;
+  email: string;
+  phone: string;
+  address: string;
+  building: string;
+  digicode: string;
+  postalCode: string;
+  city: string;
+}
+
+interface VerifiedOrderSummary {
+  order_number: string;
+  invoice_number: string | null;
+  payment_status: string;
+  status: string;
+  customer_first_name: string;
+  customer_last_name: string;
+  customer_name: string;
+  customer_email: string;
+  shipping_method: string;
+  relay_point: string | null;
+  relay_point_id: string | null;
+  address: string | null;
+  postal_code: string;
+  city: string;
+  subtotal: number;
+  shipping_cost: number;
+  total: number;
+  items: OrderItem[];
+  date: string;
+  paid_at: string | null;
+}
+
+function CheckoutContent() {
+  const searchParams = useSearchParams();
+  const statusParam = searchParams.get("status");
+  const sessionIdParam = searchParams.get("session_id");
+  const cancelledOrderParam = searchParams.get("order");
+
   const { items, subtotal, totalCount, clearCart, isHydrated } = useCart();
   const { user, updateProfile } = useAuth();
 
   const [selectedShipping, setSelectedShipping] = useState<ShippingMethod>(SHIPPING_METHODS[0]);
-  const [isSubmitted, setIsSubmitted] = useState(false);
+  const [relaySelection, setRelaySelection] = useState<SelectedRelayPoint | null>(null);
+  const [cgvAccepted, setCgvAccepted] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
-  const [confirmedOrderNumber, setConfirmedOrderNumber] = useState<string>("CP-2026-0043");
 
-  // Données formulaire
-  const [formData, setFormData] = useState({
-    firstName: "",
-    lastName: "",
-    email: "",
-    phone: "",
-    address: "",
-    building: "",
-    digicode: "",
-    postalCode: "75011",
-    city: "Paris",
-    relayChoice: "",
+  const [verifiedOrder, setVerifiedOrder] = useState<VerifiedOrderSummary | null>(null);
+  const [verifyError, setVerifyError] = useState<string | null>(null);
+  const hasClearedCartRef = useRef(false);
+
+  const [formOverrides, setFormOverrides] = useState<{
+    userId: string | null;
+    values: Partial<CheckoutFormState>;
+  }>({
+    userId: null,
+    values: {},
   });
 
-  // Autocomplétion intelligente en 1 clic si le client est connecté
-  useEffect(() => {
-    if (user) {
-      setFormData((prev) => ({
-        ...prev,
-        firstName: prev.firstName || user.firstName || "",
-        lastName: prev.lastName || user.lastName || "",
-        email: prev.email || user.email || "",
-        phone: prev.phone || user.phone || "",
-        address: prev.address || user.address || "",
-        building: prev.building || user.building || "",
-        digicode: prev.digicode || user.digicode || "",
-        postalCode: prev.postalCode === "75011" && user.postalCode ? user.postalCode : prev.postalCode,
-        city: prev.city === "Paris" && user.city ? user.city : prev.city,
-      }));
-    }
-  }, [user]);
+  const currentUserId = user?.id || null;
+  const activeOverrides = formOverrides.userId === currentUserId ? formOverrides.values : {};
 
-  const currentRelay =
-    formData.relayChoice.trim() ||
-    `Point Relais à proximité (${formData.postalCode.trim() || "France"})`;
+  const formData: CheckoutFormState = {
+    firstName: activeOverrides.firstName ?? user?.firstName ?? "",
+    lastName: activeOverrides.lastName ?? user?.lastName ?? "",
+    email: activeOverrides.email ?? user?.email ?? "",
+    phone: activeOverrides.phone ?? user?.phone ?? "",
+    address: activeOverrides.address ?? user?.address ?? "",
+    building: activeOverrides.building ?? user?.building ?? "",
+    digicode: activeOverrides.digicode ?? user?.digicode ?? "",
+    postalCode: activeOverrides.postalCode ?? user?.postalCode ?? "",
+    city: activeOverrides.city ?? user?.city ?? "",
+  };
+
+  const updateFormField = (patch: Partial<CheckoutFormState>) => {
+    setFormOverrides((prev) => ({
+      userId: currentUserId,
+      values: {
+        ...(prev.userId === currentUserId ? prev.values : {}),
+        ...patch,
+      },
+    }));
+  };
+
+  const isVerifyingSuccess =
+    statusParam === "success" && Boolean(sessionIdParam) && !verifiedOrder && !verifyError;
+
+  useEffect(() => {
+    if (statusParam !== "success" || !sessionIdParam) {
+      return;
+    }
+
+    const activeSessionId = sessionIdParam;
+    let isMounted = true;
+
+    async function verifyStripeSession() {
+      try {
+        const res = await fetch(
+          `/api/checkout/verify-session?session_id=${encodeURIComponent(activeSessionId)}`
+        );
+        const data = (await res.json().catch(() => ({}))) as {
+          order?: VerifiedOrderSummary;
+          error?: string;
+        };
+
+        if (!isMounted) return;
+
+        if (!res.ok || !data.order) {
+          setVerifyError(
+            data.error || "Impossible de vérifier votre commande auprès de Stripe."
+          );
+          return;
+        }
+
+        setVerifiedOrder(data.order);
+        if (!hasClearedCartRef.current) {
+          hasClearedCartRef.current = true;
+          clearCart();
+        }
+      } catch {
+        if (isMounted) {
+          setVerifyError("Erreur réseau lors de la vérification du paiement.");
+        }
+      }
+    }
+
+    void verifyStripeSession();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [statusParam, sessionIdParam, clearCart]);
 
   const isFreeShipping = subtotal >= FREE_SHIPPING_THRESHOLD;
 
@@ -86,178 +177,309 @@ export default function CheckoutPage() {
     e.preventDefault();
     setErrorMessage(null);
 
-    // 1. Validation universelle et flexible du numéro de téléphone de contact
     const cleanedPhone = formData.phone.trim();
-    if (!cleanedPhone || cleanedPhone.replace(/\s+/g, "").length < 4) {
-      setErrorMessage("Veuillez renseigner un numéro de téléphone de contact.");
+    if (!cleanedPhone || cleanedPhone.replace(/\s+/g, "").length < 6) {
+      setErrorMessage("Veuillez renseigner un numéro de téléphone de contact valide.");
       return;
     }
 
-    // 2. Validation flexible du code postal et de la ville
-    if (!formData.postalCode.trim()) {
-      setErrorMessage("Veuillez renseigner votre code postal.");
+    const cleanedPostalCode = formData.postalCode.trim();
+    if (!/^\d{5}$/.test(cleanedPostalCode)) {
+      setErrorMessage("Veuillez renseigner un code postal français valide à 5 chiffres.");
       return;
     }
+
     if (!formData.city.trim()) {
       setErrorMessage("Veuillez renseigner votre ville.");
       return;
     }
 
-    // 3. Validation de l'adresse de rue si livraison à domicile
-    if (!selectedShipping.requires_relay_point) {
-      if (!formData.address.trim()) {
-        setErrorMessage("Veuillez renseigner votre adresse de livraison.");
+    if (selectedShipping.requires_relay_point) {
+      if (!relaySelection || !relaySelection.label.trim()) {
+        setErrorMessage("Veuillez sélectionner ou confirmer votre Point Relais Mondial Relay.");
         return;
       }
+    } else if (!formData.address.trim()) {
+      setErrorMessage("Veuillez renseigner votre adresse de livraison.");
+      return;
+    }
+
+    if (!cgvAccepted) {
+      setErrorMessage("Veuillez accepter les Conditions Générales de Vente pour poursuivre.");
+      return;
     }
 
     setIsSubmitting(true);
 
-    const orderNum = `CP-2026-${Math.floor(1000 + Math.random() * 9000)}`;
-    const orderId = `ord-${Date.now()}`;
-
-    // 4. Enregistrer la commande dans Supabase avec await et gestion d'erreurs
-    if (isSupabaseConfigured && supabase) {
-      try {
-        // Blindage UUID : Supabase attend un UUID strict pour user_id (évite l'erreur 'invalid input syntax for type uuid')
-        const isValidUuid = Boolean(
-          user?.id &&
-          /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(user.id)
-        );
-        const validUserId = isValidUuid ? user!.id : null;
-
-        const orderPayload: Record<string, any> = {
-          id: orderId,
-          ...(validUserId ? { user_id: validUserId } : {}),
-          order_number: orderNum,
-          date: new Date().toLocaleDateString("fr-FR", {
-            day: "2-digit",
-            month: "short",
-            hour: "2-digit",
-            minute: "2-digit",
-          }),
-          customer_first_name: formData.firstName.trim(),
-          customer_last_name: formData.lastName.trim(),
-          customer_name: `${formData.firstName.trim()} ${formData.lastName.trim()}`,
-          customer_email: formData.email.trim().toLowerCase(),
-          customer_phone: cleanedPhone,
-          shipping_method_id: selectedShipping.id,
-          shipping_method: selectedShipping.name,
-          shipping_cost: effectiveShippingPrice,
-          relay_point: selectedShipping.requires_relay_point ? currentRelay : null,
-          address: selectedShipping.requires_relay_point ? null : formData.address.trim(),
-          building: selectedShipping.requires_relay_point ? null : formData.building?.trim() || null,
-          digicode: selectedShipping.requires_relay_point ? null : formData.digicode?.trim() || null,
-          postal_code: formData.postalCode.trim(),
-          city: formData.city.trim(),
-          subtotal: Number(subtotal),
-          total: Number(totalOrder),
-          status: "pending",
-          tracking: "",
-          items: items.map((it) => ({
-            name: it.name,
-            variant: it.variantLabel,
-            qty: it.quantity,
-            price: Number(it.price),
-          })),
+    try {
+      const itemsPayload = items.map((it) => {
+        const prefix = `${it.productId}-`;
+        const variantId = it.id.startsWith(prefix) ? it.id.slice(prefix.length) : "default";
+        return {
+          productId: it.productId,
+          variantId,
+          quantity: it.quantity,
         };
+      });
 
-        let { error } = await supabase.from("orders").insert(orderPayload);
+      const headers: Record<string, string> = {
+        "Content-Type": "application/json",
+      };
 
-        // Fallback automatique si la colonne user_id n'existe pas encore dans la table distante
-        if (error && "user_id" in orderPayload) {
-          console.warn("Échec insertion avec user_id, repli sans user_id:", error.message);
-          const { user_id, ...payloadWithoutUserId } = orderPayload;
-          const retry = await supabase.from("orders").insert(payloadWithoutUserId);
-          error = retry.error;
-        }
-
-        if (error) {
-          console.error("Erreur enregistrement commande Supabase:", error);
-          setErrorMessage(
-            "Une erreur technique est survenue lors de l'enregistrement de votre commande. Veuillez réessayer."
-          );
-          setIsSubmitting(false);
-          return;
-        }
-
-        // Si le client est connecté, synchroniser et compléter automatiquement son Carnet d'Adresses
-        if (user) {
-          const profileUpdates: Partial<typeof user> = {};
-          if (!user.address && formData.address) profileUpdates.address = formData.address.trim();
-          if (!user.building && formData.building) profileUpdates.building = formData.building.trim();
-          if (!user.digicode && formData.digicode) profileUpdates.digicode = formData.digicode.trim();
-          if ((!user.postalCode || user.postalCode === "75011") && formData.postalCode) {
-            profileUpdates.postalCode = formData.postalCode.trim();
+      if (isSupabaseConfigured && supabase) {
+        try {
+          const {
+            data: { session },
+          } = await supabase.auth.getSession();
+          if (session?.access_token) {
+            headers["Authorization"] = `Bearer ${session.access_token}`;
           }
-          if ((!user.city || user.city === "Paris") && formData.city) {
-            profileUpdates.city = formData.city.trim();
-          }
-          if (!user.phone && cleanedPhone) profileUpdates.phone = cleanedPhone;
-
-          if (Object.keys(profileUpdates).length > 0) {
-            updateProfile(profileUpdates).catch((err) => console.warn("Erreur auto-sauvegarde profil:", err));
-          }
+        } catch {
+          // Poursuivre sans jeton si lecture session impossible
         }
-      } catch (err) {
-        console.error("Erreur réseau Supabase:", err);
+      }
+
+      const res = await fetch("/api/checkout/session", {
+        method: "POST",
+        headers,
+        body: JSON.stringify({
+          items: itemsPayload,
+          shippingMethodCode: selectedShipping.code,
+          customer: {
+            firstName: formData.firstName.trim(),
+            lastName: formData.lastName.trim(),
+            email: formData.email.trim().toLowerCase(),
+            phone: cleanedPhone,
+          },
+          address: {
+            street: formData.address.trim(),
+            building: formData.building.trim(),
+            digicode: formData.digicode.trim(),
+            postalCode: cleanedPostalCode,
+            city: formData.city.trim(),
+          },
+          relayPoint: selectedShipping.requires_relay_point ? relaySelection : null,
+          cgvAccepted,
+        }),
+      });
+
+      const data = (await res.json().catch(() => ({}))) as {
+        url?: string;
+        error?: string;
+      };
+
+      if (!res.ok || !data.url) {
         setErrorMessage(
-          "Impossible d'établir la connexion sécurisée avec la base de données. Veuillez vérifier votre réseau."
+          data.error ||
+            "Impossible de préparer la page de paiement Stripe. Veuillez réessayer."
         );
         setIsSubmitting(false);
         return;
       }
-    }
 
-    setConfirmedOrderNumber(orderNum);
-    setIsSubmitted(true);
-    setIsSubmitting(false);
-    clearCart();
+      // Synchroniser le carnet d'adresses du client connecté sans bloquer la redirection Stripe
+      if (user) {
+        const profileUpdates: Partial<typeof user> = {};
+        if (!user.address && formData.address.trim()) {
+          profileUpdates.address = formData.address.trim();
+        }
+        if (!user.building && formData.building.trim()) {
+          profileUpdates.building = formData.building.trim();
+        }
+        if (!user.digicode && formData.digicode.trim()) {
+          profileUpdates.digicode = formData.digicode.trim();
+        }
+        if (!user.postalCode && cleanedPostalCode) {
+          profileUpdates.postalCode = cleanedPostalCode;
+        }
+        if (!user.city && formData.city.trim()) {
+          profileUpdates.city = formData.city.trim();
+        }
+        if (!user.phone && cleanedPhone) {
+          profileUpdates.phone = cleanedPhone;
+        }
+
+        if (Object.keys(profileUpdates).length > 0) {
+          updateProfile(profileUpdates).catch((err) =>
+            console.warn("Erreur auto-sauvegarde profil:", err)
+          );
+        }
+      }
+
+      window.location.href = data.url;
+    } catch {
+      setErrorMessage(
+        "Erreur de connexion réseau lors de la préparation du paiement. Veuillez réessayer."
+      );
+      setIsSubmitting(false);
+    }
   };
 
-  if (isSubmitted) {
+  // --- ÉCRAN VÉRIFICATION POST-STRIPE ---
+  if (isVerifyingSuccess) {
     return (
       <div className="min-h-screen flex flex-col bg-[#FAFAF8] text-[#1C1917]">
         <Header />
-        <main className="flex-1 max-w-2xl mx-auto px-4 py-20 text-center space-y-6">
+        <main className="flex-1 max-w-md mx-auto px-4 py-24 text-center flex flex-col items-center justify-center space-y-4">
+          <Loader2 className="w-8 h-8 animate-spin text-[#A16207]" />
+          <p className="text-sm font-medium text-[#57534E]">
+            Vérification sécurisée de votre règlement Stripe...
+          </p>
+        </main>
+        <Footer />
+      </div>
+    );
+  }
+
+  if (statusParam === "success" && verifyError) {
+    return (
+      <div className="min-h-screen flex flex-col bg-[#FAFAF8] text-[#1C1917]">
+        <Header />
+        <main className="flex-1 max-w-lg mx-auto px-4 py-20 text-center space-y-5">
+          <div className="w-16 h-16 rounded-full bg-rose-100 text-rose-700 flex items-center justify-center mx-auto">
+            <AlertCircle className="w-8 h-8" />
+          </div>
+          <h1 className="font-serif text-3xl text-[#1C1917]">Vérification impossible</h1>
+          <p className="text-sm text-[#57534E]">{verifyError}</p>
+          <div className="pt-2">
+            <Link
+              href="/compte"
+              className="inline-flex items-center gap-2 px-6 py-3 rounded-xl bg-[#1C1917] hover:bg-[#A16207] text-white text-xs font-semibold uppercase tracking-wider transition"
+            >
+              <span>Consulter mes commandes</span>
+            </Link>
+          </div>
+        </main>
+        <Footer />
+      </div>
+    );
+  }
+
+  // --- ÉCRAN DE CONFIRMATION RÉELLE ---
+  if (verifiedOrder) {
+    const isPaid = verifiedOrder.payment_status === "paid";
+
+    return (
+      <div className="min-h-screen flex flex-col bg-[#FAFAF8] text-[#1C1917]">
+        <Header />
+        <main className="flex-1 max-w-2xl mx-auto px-4 py-16 sm:py-20 text-center space-y-6 w-full">
           <div className="w-20 h-20 rounded-full bg-emerald-100 text-emerald-800 flex items-center justify-center mx-auto shadow-sm">
             <CheckCircle2 className="w-10 h-10" />
           </div>
-          <span className="text-xs uppercase tracking-[0.3em] text-[#A16207] font-semibold block">
-            Commande Confirmée • #{confirmedOrderNumber}
-          </span>
-          <h1 className="font-serif text-4xl sm:text-5xl text-[#1C1917]">
-            Merci pour votre commande, {formData.firstName} !
-          </h1>
-          <p className="text-xs sm:text-sm text-[#57534E] leading-relaxed max-w-lg mx-auto font-light">
-            Un e-mail de confirmation récapitulant vos articles et le suivi de livraison a été envoyé à{" "}
-            <strong className="text-[#1C1917]">{formData.email}</strong>. Vos créations artisanales de Grasse sont en cours de préparation.
-          </p>
 
-          <div className="p-6 bg-white rounded-2xl border border-[#E7E2DA] max-w-md mx-auto text-left space-y-3 text-xs text-[#57534E]">
-            <p className="font-semibold text-[#1C1917]">Détails de l&apos;expédition :</p>
-            <p>
-              Mode : <span className="font-medium text-[#A16207]">{selectedShipping.name}</span>
-            </p>
-            {selectedShipping.requires_relay_point ? (
-              <p>
-                Lieu de retrait : <span className="text-[#1C1917] font-medium">{formData.relayChoice}</span>
-              </p>
-            ) : (
-              <p>
-                Adresse :{" "}
-                <span className="text-[#1C1917] font-medium">
-                  {formData.address}, {formData.postalCode} {formData.city}
-                </span>
-              </p>
-            )}
-            <p className="pt-2 border-t border-[#F2EFE9] flex justify-between font-semibold text-sm text-[#1C1917]">
-              <span>Total réglé</span>
-              <span>{formatPrice(totalOrder)}</span>
-            </p>
+          <div className="space-y-2">
+            <span className="text-xs uppercase tracking-[0.28em] text-[#A16207] font-semibold block">
+              Commande #{verifiedOrder.order_number}
+              {verifiedOrder.invoice_number ? ` • Facture ${verifiedOrder.invoice_number}` : ""}
+            </span>
+            <h1 className="font-serif text-4xl sm:text-5xl text-[#1C1917]">
+              Merci pour votre commande, {verifiedOrder.customer_first_name} !
+            </h1>
+            <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-800 border border-emerald-200">
+              <CheckCircle2 className="w-3.5 h-3.5" />
+              <span>
+                {isPaid
+                  ? "Paiement confirmé par Stripe"
+                  : "Paiement en cours de confirmation"}
+              </span>
+            </div>
           </div>
 
-          <div className="pt-4">
+          <p className="text-xs sm:text-sm text-[#57534E] leading-relaxed max-w-lg mx-auto font-light">
+            Un e-mail récapitulatif avec votre facture a été envoyé à{" "}
+            <strong className="text-[#1C1917]">{verifiedOrder.customer_email}</strong>. Vos créations artisanales de Grasse sont en cours de préparation.
+          </p>
+
+          <div className="p-6 bg-white rounded-2xl border border-[#E7E2DA] max-w-lg mx-auto text-left space-y-4 text-xs text-[#57534E]">
+            <div className="space-y-1.5">
+              <p className="font-semibold text-[#1C1917]">Détails de l&apos;expédition :</p>
+              <p>
+                Mode :{" "}
+                <span className="font-medium text-[#A16207]">
+                  {verifiedOrder.shipping_method}
+                </span>
+              </p>
+              {verifiedOrder.relay_point ? (
+                <p>
+                  Lieu de retrait :{" "}
+                  <span className="text-[#1C1917] font-medium">
+                    {verifiedOrder.relay_point}
+                  </span>
+                </p>
+              ) : (
+                <p>
+                  Adresse :{" "}
+                  <span className="text-[#1C1917] font-medium">
+                    {verifiedOrder.address}, {verifiedOrder.postal_code} {verifiedOrder.city}
+                  </span>
+                </p>
+              )}
+            </div>
+
+            {verifiedOrder.items.length > 0 && (
+              <div className="pt-3 border-t border-[#F2EFE9] space-y-2">
+                <p className="font-semibold text-[#1C1917]">Articles commandés :</p>
+                {verifiedOrder.items.map((it, idx) => (
+                  <div key={idx} className="flex justify-between gap-2">
+                    <span>
+                      <strong>{it.qty}×</strong> {it.name} ({it.variant})
+                    </span>
+                    <span className="font-mono text-[#1C1917] shrink-0">
+                      {formatPrice(it.price * it.qty)}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            <div className="pt-3 border-t border-[#F2EFE9] space-y-1">
+              <div className="flex justify-between">
+                <span>Livraison</span>
+                <span>
+                  {verifiedOrder.shipping_cost === 0
+                    ? "Offert"
+                    : formatPrice(verifiedOrder.shipping_cost)}
+                </span>
+              </div>
+              <div className="flex justify-between font-semibold text-sm text-[#1C1917] pt-1">
+                <span>Total réglé TTC</span>
+                <span>{formatPrice(verifiedOrder.total)}</span>
+              </div>
+              <p className="text-[11px] text-[#78716C] text-right">
+                TVA non applicable, art. 293 B du CGI
+              </p>
+            </div>
+          </div>
+
+          <div className="pt-2 flex flex-wrap items-center justify-center gap-3">
+            <button
+              type="button"
+              onClick={() =>
+                openPrintableInvoice({
+                  invoiceNumber:
+                    verifiedOrder.invoice_number || verifiedOrder.order_number,
+                  orderNumber: verifiedOrder.order_number,
+                  date: verifiedOrder.date,
+                  paidAt: verifiedOrder.paid_at,
+                  customerName: verifiedOrder.customer_name,
+                  customerEmail: verifiedOrder.customer_email,
+                  shippingMethod: verifiedOrder.shipping_method,
+                  relayPoint: verifiedOrder.relay_point,
+                  address: verifiedOrder.address,
+                  postalCode: verifiedOrder.postal_code,
+                  city: verifiedOrder.city,
+                  items: verifiedOrder.items,
+                  subtotal: verifiedOrder.subtotal,
+                  shippingCost: verifiedOrder.shipping_cost,
+                  total: verifiedOrder.total,
+                })
+              }
+              className="inline-flex items-center gap-2 px-6 py-3.5 rounded-xl border border-[#E7E2DA] bg-white hover:bg-[#F2EFE9] text-[#1C1917] text-xs font-semibold uppercase tracking-wider transition cursor-pointer"
+            >
+              <Printer className="w-4 h-4 text-[#A16207]" />
+              <span>Imprimer ma facture</span>
+            </button>
+
             <Link
               href="/"
               className="inline-flex items-center gap-2 px-8 py-3.5 rounded-xl bg-[#1C1917] hover:bg-[#A16207] text-white text-xs font-semibold uppercase tracking-wider transition"
@@ -284,13 +506,15 @@ export default function CheckoutPage() {
     );
   }
 
-  if (isHydrated && items.length === 0 && !isSubmitted) {
+  if (isHydrated && items.length === 0) {
     return (
       <div className="min-h-screen flex flex-col bg-[#FAFAF8] text-[#1C1917]">
         <Header />
         <main className="flex-1 max-w-md mx-auto px-4 py-24 text-center space-y-4">
           <h1 className="font-serif text-3xl text-[#1C1917]">Votre panier est vide</h1>
-          <p className="text-xs text-[#57534E]">Ajoutez des produits à votre panier avant de passer commande.</p>
+          <p className="text-xs text-[#57534E]">
+            Ajoutez des produits à votre panier avant de passer commande.
+          </p>
           <div className="pt-4">
             <Link
               href="/boutique"
@@ -320,24 +544,45 @@ export default function CheckoutPage() {
           </Link>
           <div className="flex items-center gap-1.5 text-xs text-emerald-800 bg-emerald-50 border border-emerald-200 px-3 py-1 rounded-full">
             <Lock className="w-3.5 h-3.5" />
-            <span className="font-medium">Paiement SSL 100% Sécurisé</span>
+            <span className="font-medium">Paiement Stripe 100% Sécurisé</span>
           </div>
         </div>
+
+        {/* Bannière annulation de paiement Stripe */}
+        {statusParam === "cancelled" && (
+          <div className="mb-6 p-4 rounded-xl bg-amber-50 border border-amber-200 text-amber-950 flex items-start gap-3">
+            <AlertCircle className="w-5 h-5 text-amber-700 shrink-0 mt-0.5" />
+            <p className="text-xs font-medium leading-relaxed">
+              {cancelledOrderParam ? `Commande #${cancelledOrderParam} — ` : ""}
+              Le paiement a été annulé avant finalisation. Votre panier reste intact si vous souhaitez reprendre votre commande.
+            </p>
+          </div>
+        )}
 
         {/* Bannière incitative livraison offerte */}
         {isFreeShipping ? (
           <div className="mb-6 p-4 rounded-xl bg-emerald-50/80 border border-emerald-200 text-emerald-900 flex items-center gap-3">
             <Sparkles className="w-5 h-5 text-emerald-700 shrink-0" />
             <p className="text-xs font-medium">
-              Votre commande dépasse 60,00 € : <strong>la livraison standard (Mondial Relay & Colissimo) vous est entièrement offerte !</strong>
+              Votre commande dépasse 60,00 € :{" "}
+              <strong>
+                la livraison standard (Mondial Relay &amp; Colissimo) vous est entièrement offerte !
+              </strong>
             </p>
           </div>
         ) : (
           <div className="mb-6 p-4 rounded-xl bg-amber-50/70 border border-amber-200 text-[#1C1917] flex items-center justify-between text-xs">
             <span>
-              Plus que <strong className="text-[#A16207]">{formatPrice(FREE_SHIPPING_THRESHOLD - subtotal)}</strong> pour profiter de la <strong>livraison standard offerte</strong> en France.
+              Plus que{" "}
+              <strong className="text-[#A16207]">
+                {formatPrice(FREE_SHIPPING_THRESHOLD - subtotal)}
+              </strong>{" "}
+              pour profiter de la <strong>livraison standard offerte</strong> en France.
             </span>
-            <Link href="/boutique" className="text-xs font-semibold text-[#A16207] hover:underline shrink-0 ml-3">
+            <Link
+              href="/boutique"
+              className="text-xs font-semibold text-[#A16207] hover:underline shrink-0 ml-3"
+            >
               Ajouter un article →
             </Link>
           </div>
@@ -352,7 +597,6 @@ export default function CheckoutPage() {
         )}
 
         <form onSubmit={handleSubmit} className="grid grid-cols-1 lg:grid-cols-12 gap-10">
-          
           {/* Colonne Gauche : Formulaire Coordonnées & Livraison France */}
           <div className="lg:col-span-7 space-y-8">
             {/* Bannière Connexion / 1-Clic Espace Client */}
@@ -365,7 +609,11 @@ export default function CheckoutPage() {
                   <span className="flex items-center gap-1.5">
                     <Sparkles className="w-4 h-4 text-[#A16207] shrink-0 inline" />
                     <span>
-                      Connecté(e) en tant que <strong>{user.firstName} {user.lastName}</strong> — Vos coordonnées et carnet d&apos;adresses ont été pré-remplis automatiquement.
+                      Connecté(e) en tant que{" "}
+                      <strong>
+                        {user.firstName} {user.lastName}
+                      </strong>{" "}
+                      — Vos coordonnées et carnet d&apos;adresses ont été pré-remplis automatiquement.
                     </span>
                   </span>
                 </div>
@@ -384,7 +632,10 @@ export default function CheckoutPage() {
                   </span>
                   <span>
                     Vous avez un compte Club Parfum ?{" "}
-                    <Link href="/compte" className="text-[#A16207] font-semibold underline hover:text-[#1C1917]">
+                    <Link
+                      href="/compte"
+                      className="text-[#A16207] font-semibold underline hover:text-[#1C1917]"
+                    >
                       Connectez-vous
                     </Link>{" "}
                     pour pré-remplir vos coordonnées en 1 clic, ou poursuivez directement en tant qu&apos;invité(e).
@@ -398,7 +649,10 @@ export default function CheckoutPage() {
               <h2 className="font-serif text-2xl text-[#1C1917]">1. Vos coordonnées</h2>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
-                  <label htmlFor="checkout-firstname" className="block text-sm font-medium text-[#1C1917] mb-1.5">
+                  <label
+                    htmlFor="checkout-firstname"
+                    className="block text-sm font-medium text-[#1C1917] mb-1.5"
+                  >
                     Prénom *
                   </label>
                   <input
@@ -407,12 +661,15 @@ export default function CheckoutPage() {
                     required
                     placeholder="Marie"
                     value={formData.firstName}
-                    onChange={(e) => setFormData({ ...formData, firstName: e.target.value })}
+                    onChange={(e) => updateFormField({ firstName: e.target.value })}
                     className="w-full px-4 py-3 rounded-xl border border-[#E7E2DA] focus:border-[#A16207] focus:outline-none text-sm text-[#1C1917]"
                   />
                 </div>
                 <div>
-                  <label htmlFor="checkout-lastname" className="block text-sm font-medium text-[#1C1917] mb-1.5">
+                  <label
+                    htmlFor="checkout-lastname"
+                    className="block text-sm font-medium text-[#1C1917] mb-1.5"
+                  >
                     Nom *
                   </label>
                   <input
@@ -421,7 +678,7 @@ export default function CheckoutPage() {
                     required
                     placeholder="Dupont"
                     value={formData.lastName}
-                    onChange={(e) => setFormData({ ...formData, lastName: e.target.value })}
+                    onChange={(e) => updateFormField({ lastName: e.target.value })}
                     className="w-full px-4 py-3 rounded-xl border border-[#E7E2DA] focus:border-[#A16207] focus:outline-none text-sm text-[#1C1917]"
                   />
                 </div>
@@ -429,7 +686,10 @@ export default function CheckoutPage() {
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
-                  <label htmlFor="checkout-email" className="block text-sm font-medium text-[#1C1917] mb-1.5">
+                  <label
+                    htmlFor="checkout-email"
+                    className="block text-sm font-medium text-[#1C1917] mb-1.5"
+                  >
                     E-mail *
                   </label>
                   <input
@@ -438,21 +698,24 @@ export default function CheckoutPage() {
                     required
                     placeholder="marie.dupont@gmail.com"
                     value={formData.email}
-                    onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                    onChange={(e) => updateFormField({ email: e.target.value })}
                     className="w-full px-4 py-3 rounded-xl border border-[#E7E2DA] focus:border-[#A16207] focus:outline-none text-sm text-[#1C1917]"
                   />
                 </div>
                 <div>
-                  <label htmlFor="checkout-phone" className="block text-sm font-medium text-[#1C1917] mb-1.5">
+                  <label
+                    htmlFor="checkout-phone"
+                    className="block text-sm font-medium text-[#1C1917] mb-1.5"
+                  >
                     Téléphone de contact (suivi colis) *
                   </label>
                   <input
                     id="checkout-phone"
                     type="tel"
                     required
-                    placeholder="+33 6 12 34 56 78 ou numéro international"
+                    placeholder="+33 6 12 34 56 78"
                     value={formData.phone}
-                    onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
+                    onChange={(e) => updateFormField({ phone: e.target.value })}
                     className="w-full px-4 py-3 rounded-xl border border-[#E7E2DA] focus:border-[#A16207] focus:outline-none text-sm text-[#1C1917]"
                   />
                 </div>
@@ -487,14 +750,18 @@ export default function CheckoutPage() {
                         />
                         <div>
                           <div className="flex items-center gap-2">
-                            <p className="font-serif text-base sm:text-[17px] font-normal text-[#1C1917]">{method.name}</p>
+                            <p className="font-serif text-base sm:text-[17px] font-normal text-[#1C1917]">
+                              {method.name}
+                            </p>
                             {isFreeMethod && (
                               <span className="text-[11px] bg-emerald-100 text-emerald-800 font-bold px-2 py-0.5 rounded-full uppercase tracking-wider">
                                 Offert dès 60 €
                               </span>
                             )}
                           </div>
-                          <p className="text-xs sm:text-sm text-[#57534E] leading-relaxed mt-1">{method.description}</p>
+                          <p className="text-xs sm:text-sm text-[#57534E] leading-relaxed mt-1">
+                            {method.description}
+                          </p>
                           <span className="text-xs text-[#A16207] font-medium block mt-1.5">
                             Délai indicatif : {method.estimated_days}
                           </span>
@@ -503,7 +770,9 @@ export default function CheckoutPage() {
                       <div className="text-right shrink-0">
                         {isFreeMethod ? (
                           <div className="flex flex-col items-end">
-                            <span className="font-serif font-bold text-base text-emerald-800">0,00 €</span>
+                            <span className="font-serif font-bold text-base text-emerald-800">
+                              0,00 €
+                            </span>
                             <span className="text-xs line-through text-[#57534E]/60">
                               {method.price.toFixed(2)} €
                             </span>
@@ -523,28 +792,41 @@ export default function CheckoutPage() {
               <div className="pt-4 border-t border-[#F2EFE9] space-y-4">
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div>
-                    <label htmlFor="checkout-postal-code" className="block text-sm font-medium text-[#1C1917] mb-1.5">
-                      Code Postal *
+                    <label
+                      htmlFor="checkout-postal-code"
+                      className="block text-sm font-medium text-[#1C1917] mb-1.5"
+                    >
+                      Code Postal (5 chiffres) *
                     </label>
                     <input
                       id="checkout-postal-code"
                       type="text"
+                      inputMode="numeric"
+                      maxLength={5}
                       required
                       placeholder="75011"
                       value={formData.postalCode}
-                      onChange={(e) => setFormData({ ...formData, postalCode: e.target.value })}
+                      onChange={(e) => {
+                        updateFormField({ postalCode: e.target.value });
+                        if (relaySelection) setRelaySelection(null);
+                      }}
                       className="w-full px-4 py-3 rounded-xl border border-[#E7E2DA] focus:border-[#A16207] focus:outline-none text-sm text-[#1C1917]"
                     />
                   </div>
                   <div>
-                    <label htmlFor="checkout-city" className="block text-sm font-medium text-[#1C1917] mb-1.5">Ville *</label>
+                    <label
+                      htmlFor="checkout-city"
+                      className="block text-sm font-medium text-[#1C1917] mb-1.5"
+                    >
+                      Ville *
+                    </label>
                     <input
                       id="checkout-city"
                       type="text"
                       required
                       placeholder="Paris"
                       value={formData.city}
-                      onChange={(e) => setFormData({ ...formData, city: e.target.value })}
+                      onChange={(e) => updateFormField({ city: e.target.value })}
                       className="w-full px-4 py-3 rounded-xl border border-[#E7E2DA] focus:border-[#A16207] focus:outline-none text-sm text-[#1C1917]"
                     />
                   </div>
@@ -552,26 +834,24 @@ export default function CheckoutPage() {
 
                 {/* Détails spécifiques selon l'option */}
                 {selectedShipping.requires_relay_point ? (
-                  <div className="pt-2 space-y-2">
-                    <label htmlFor="checkout-relay" className="block text-sm font-medium text-[#1C1917]">
-                      Nom ou adresse du commerce / Locker souhaité (Optionnel)
-                    </label>
-                    <input
-                      id="checkout-relay"
-                      type="text"
-                      placeholder="Ex : Locker Mondial Relay 24/7 Gare, Presse & Tabac du Centre..."
-                      value={formData.relayChoice}
-                      onChange={(e) => setFormData({ ...formData, relayChoice: e.target.value })}
-                      className="w-full px-4 py-3 rounded-xl border border-[#E7E2DA] focus:border-[#A16207] focus:outline-none text-sm bg-white text-[#1C1917]"
-                    />
-                    <p className="text-xs text-[#57534E]">
-                      Un conseiller vérifiera le Point Relais le plus proche de votre code postal avant expédition.
-                    </p>
-                  </div>
+                  <RelayPointPicker
+                    postalCode={formData.postalCode}
+                    city={formData.city}
+                    value={relaySelection}
+                    onChange={setRelaySelection}
+                    onSuggestCity={(suggestedCity) => {
+                      if (!formData.city.trim()) {
+                        updateFormField({ city: suggestedCity });
+                      }
+                    }}
+                  />
                 ) : (
                   <div className="pt-2 space-y-4">
                     <div>
-                      <label htmlFor="checkout-address" className="block text-sm font-medium text-[#1C1917] mb-1.5">
+                      <label
+                        htmlFor="checkout-address"
+                        className="block text-sm font-medium text-[#1C1917] mb-1.5"
+                      >
                         Adresse de livraison *
                       </label>
                       <input
@@ -580,13 +860,16 @@ export default function CheckoutPage() {
                         required
                         placeholder="14 Rue des Lilas"
                         value={formData.address}
-                        onChange={(e) => setFormData({ ...formData, address: e.target.value })}
+                        onChange={(e) => updateFormField({ address: e.target.value })}
                         className="w-full px-4 py-3 rounded-xl border border-[#E7E2DA] focus:border-[#A16207] focus:outline-none text-sm text-[#1C1917]"
                       />
                     </div>
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                       <div>
-                        <label htmlFor="checkout-building" className="block text-sm font-medium text-[#1C1917] mb-1.5">
+                        <label
+                          htmlFor="checkout-building"
+                          className="block text-sm font-medium text-[#1C1917] mb-1.5"
+                        >
                           Bâtiment / Étage (facultatif)
                         </label>
                         <input
@@ -594,12 +877,15 @@ export default function CheckoutPage() {
                           type="text"
                           placeholder="Bât B, 3e étage"
                           value={formData.building}
-                          onChange={(e) => setFormData({ ...formData, building: e.target.value })}
+                          onChange={(e) => updateFormField({ building: e.target.value })}
                           className="w-full px-4 py-3 rounded-xl border border-[#E7E2DA] text-sm text-[#1C1917]"
                         />
                       </div>
                       <div>
-                        <label htmlFor="checkout-digicode" className="block text-sm font-medium text-[#1C1917] mb-1.5">
+                        <label
+                          htmlFor="checkout-digicode"
+                          className="block text-sm font-medium text-[#1C1917] mb-1.5"
+                        >
                           Digicode / Interphone
                         </label>
                         <input
@@ -607,7 +893,7 @@ export default function CheckoutPage() {
                           type="text"
                           placeholder="A1234 / Dupont"
                           value={formData.digicode}
-                          onChange={(e) => setFormData({ ...formData, digicode: e.target.value })}
+                          onChange={(e) => updateFormField({ digicode: e.target.value })}
                           className="w-full px-4 py-3 rounded-xl border border-[#E7E2DA] text-sm text-[#1C1917]"
                         />
                       </div>
@@ -618,7 +904,7 @@ export default function CheckoutPage() {
             </section>
           </div>
 
-          {/* Colonne Droite : Récapitulatif de Commande & Paiement */}
+          {/* Colonne Droite : Récapitulatif de Commande & Paiement Stripe */}
           <div className="lg:col-span-5 space-y-6">
             <section className="bg-white p-6 sm:p-8 rounded-2xl border border-[#E7E2DA] space-y-6 shadow-sm sticky top-28">
               <h2 className="font-serif text-2xl text-[#1C1917]">Récapitulatif ({totalCount})</h2>
@@ -629,11 +915,19 @@ export default function CheckoutPage() {
                   <li key={it.id} className="py-3 flex items-center justify-between gap-3 text-sm">
                     <div className="flex items-center gap-3">
                       <div className="relative w-12 h-12 rounded-lg overflow-hidden bg-[#F2EFE9] shrink-0 border border-[#E7E2DA]">
-                        <Image src={it.image} alt={it.name} fill sizes="48px" className="object-cover" />
+                        <Image
+                          src={it.image}
+                          alt={it.name}
+                          fill
+                          sizes="48px"
+                          className="object-cover"
+                        />
                       </div>
                       <div>
                         <p className="font-medium text-[#1C1917] line-clamp-1">{it.name}</p>
-                        <p className="text-xs text-[#57534E]">{it.quantity}x • {it.variantLabel}</p>
+                        <p className="text-xs text-[#57534E]">
+                          {it.quantity}x • {it.variantLabel}
+                        </p>
                       </div>
                     </div>
                     <span className="font-semibold text-[#1C1917] shrink-0">
@@ -653,17 +947,25 @@ export default function CheckoutPage() {
                   <span>Livraison ({selectedShipping.name})</span>
                   <span
                     className={`font-medium ${
-                      effectiveShippingPrice === 0 ? "text-emerald-800 font-semibold" : "text-[#1C1917]"
+                      effectiveShippingPrice === 0
+                        ? "text-emerald-800 font-semibold"
+                        : "text-[#1C1917]"
                     }`}
                   >
-                    {effectiveShippingPrice === 0 ? "0,00 € (Offert)" : formatPrice(effectiveShippingPrice)}
+                    {effectiveShippingPrice === 0
+                      ? "0,00 € (Offert)"
+                      : formatPrice(effectiveShippingPrice)}
                   </span>
                 </div>
                 <div className="pt-3 border-t border-[#F2EFE9] flex justify-between items-baseline text-base font-semibold text-[#1C1917]">
                   <span>Total TTC</span>
-                  <span className="font-serif text-2xl sm:text-3xl text-[#1C1917]">{formatPrice(totalOrder)}</span>
+                  <span className="font-serif text-2xl sm:text-3xl text-[#1C1917]">
+                    {formatPrice(totalOrder)}
+                  </span>
                 </div>
-                <p className="text-xs text-[#57534E] text-right">TVA non applicable, art. 293 B du CGI</p>
+                <p className="text-xs text-[#57534E] text-right">
+                  TVA non applicable, art. 293 B du CGI
+                </p>
               </div>
 
               {/* Case à cocher obligatoire d'acceptation des CGV */}
@@ -672,6 +974,8 @@ export default function CheckoutPage() {
                   <input
                     type="checkbox"
                     required
+                    checked={cgvAccepted}
+                    onChange={(e) => setCgvAccepted(e.target.checked)}
                     className="mt-0.5 text-[#A16207] focus:ring-[#A16207] rounded-sm cursor-pointer"
                   />
                   <span>
@@ -688,7 +992,7 @@ export default function CheckoutPage() {
                 </label>
               </div>
 
-              {/* Bouton de confirmation avec simulation de commande */}
+              {/* Bouton de paiement Stripe réel */}
               <button
                 type="submit"
                 disabled={isSubmitting}
@@ -697,27 +1001,51 @@ export default function CheckoutPage() {
                 {isSubmitting ? (
                   <>
                     <Loader2 className="w-4 h-4 animate-spin" />
-                    <span>Enregistrement de la commande...</span>
+                    <span>Redirection vers Stripe...</span>
                   </>
                 ) : (
                   <>
-                    <CheckCircle2 className="w-4 h-4 text-[#A16207]" />
-                    <span>Confirmer la commande (Simulation de paiement) • {formatPrice(totalOrder)}</span>
+                    <Lock className="w-4 h-4 text-[#A16207]" />
+                    <span>
+                      Payer par Carte / Apple Pay • {formatPrice(totalOrder)}
+                    </span>
                   </>
                 )}
               </button>
 
               <div className="text-center text-xs text-[#57534E] space-y-1">
-                <p>Mode Démo : La commande sera enregistrée sans débit bancaire immédiat. Vos informations restent strictement confidentielles.</p>
-                <p className="text-[11px] text-[#A16207]">Garantie artisanale &amp; suivi de colis en direct</p>
+                <p>
+                  Règlement sécurisé par Stripe (Cartes Bancaires, Apple Pay, Google Pay — chiffrement SSL/TLS &amp; 3D Secure).
+                </p>
+                <p className="text-[11px] text-[#A16207]">
+                  Garantie artisanale &amp; facture officielle émise automatiquement
+                </p>
               </div>
             </section>
           </div>
-
         </form>
       </main>
 
       <Footer />
     </div>
+  );
+}
+
+export default function CheckoutPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="min-h-screen flex flex-col bg-[#FAFAF8] text-[#1C1917]">
+          <Header />
+          <main className="flex-1 max-w-md mx-auto px-4 py-24 text-center flex flex-col items-center justify-center space-y-4">
+            <Loader2 className="w-8 h-8 animate-spin text-[#A16207]" />
+            <p className="text-sm font-medium text-[#57534E]">Chargement du paiement...</p>
+          </main>
+          <Footer />
+        </div>
+      }
+    >
+      <CheckoutContent />
+    </Suspense>
   );
 }

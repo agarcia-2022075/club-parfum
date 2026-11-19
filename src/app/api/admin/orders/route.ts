@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSupabaseAdmin } from "@/lib/supabase";
 import { verifyAdminRequest } from "@/lib/admin-auth";
+import { sendOrderShippedEmail, type EmailOrderData } from "@/lib/email";
 
 const ALLOWED_ORDER_STATUSES = new Set(["pending", "shipped", "delivered", "cancelled"]);
 
@@ -88,49 +89,87 @@ export async function PATCH(request: NextRequest) {
       );
     }
 
-    let updatedOrder: Record<string, unknown> | null = null;
+    let targetRowId = "";
+    let previousStatus = "";
 
     if (cleanId) {
-      const { data, error } = await supabaseAdmin
+      const { data: existingById, error: existingByIdError } = await supabaseAdmin
         .from("orders")
-        .update({ status: cleanStatus, tracking: cleanTracking })
+        .select("id, status")
         .eq("id", cleanId)
-        .select()
-        .maybeSingle<Record<string, unknown>>();
+        .maybeSingle<{ id: string; status: string | null }>();
 
-      if (error) {
-        console.error("Erreur mise à jour commande par id:", error);
+      if (existingByIdError) {
+        console.error("Erreur lecture commande par id:", existingByIdError);
         return NextResponse.json(
-          { error: "Erreur lors de la mise à jour de la commande." },
+          { error: "Erreur lors de la vérification de la commande." },
           { status: 500 }
         );
       }
-      updatedOrder = data;
+
+      if (existingById) {
+        targetRowId = existingById.id;
+        previousStatus = (existingById.status || "").trim().toLowerCase();
+      }
     }
 
-    if (!updatedOrder && cleanOrderNumber) {
-      const { data, error } = await supabaseAdmin
+    if (!targetRowId && cleanOrderNumber) {
+      const { data: existingByNumber, error: existingByNumberError } = await supabaseAdmin
         .from("orders")
-        .update({ status: cleanStatus, tracking: cleanTracking })
+        .select("id, status")
         .eq("order_number", cleanOrderNumber)
-        .select()
-        .maybeSingle<Record<string, unknown>>();
+        .maybeSingle<{ id: string; status: string | null }>();
 
-      if (error) {
-        console.error("Erreur mise à jour commande par order_number:", error);
+      if (existingByNumberError) {
+        console.error("Erreur lecture commande par order_number:", existingByNumberError);
         return NextResponse.json(
-          { error: "Erreur lors de la mise à jour de la commande." },
+          { error: "Erreur lors de la vérification de la commande." },
           { status: 500 }
         );
       }
-      updatedOrder = data;
+
+      if (existingByNumber) {
+        targetRowId = existingByNumber.id;
+        previousStatus = (existingByNumber.status || "").trim().toLowerCase();
+      }
+    }
+
+    if (!targetRowId) {
+      return NextResponse.json({ error: "Commande introuvable." }, { status: 404 });
+    }
+
+    const { data: updatedOrder, error: updateError } = await supabaseAdmin
+      .from("orders")
+      .update({ status: cleanStatus, tracking: cleanTracking })
+      .eq("id", targetRowId)
+      .select()
+      .maybeSingle<Record<string, unknown>>();
+
+    if (updateError) {
+      console.error("Erreur mise à jour commande:", updateError);
+      return NextResponse.json(
+        { error: "Erreur lors de la mise à jour de la commande." },
+        { status: 500 }
+      );
     }
 
     if (!updatedOrder) {
       return NextResponse.json({ error: "Commande introuvable." }, { status: 404 });
     }
 
-    return NextResponse.json({ success: true, order: updatedOrder }, { status: 200 });
+    let emailSent = false;
+    if (cleanStatus === "shipped" && previousStatus !== "shipped") {
+      try {
+        const emailResult = await sendOrderShippedEmail(
+          updatedOrder as unknown as EmailOrderData
+        );
+        emailSent = emailResult.sent;
+      } catch (emailError) {
+        console.error("Erreur envoi email d'expédition:", emailError);
+      }
+    }
+
+    return NextResponse.json({ success: true, order: updatedOrder, emailSent }, { status: 200 });
   } catch (error: unknown) {
     console.error("Erreur PATCH /api/admin/orders:", error);
     return NextResponse.json(

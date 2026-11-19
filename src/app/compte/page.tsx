@@ -8,6 +8,7 @@ import { useAuth, evaluatePasswordStrength, validatePassword } from "@/context/A
 import { supabase, isSupabaseConfigured } from "@/lib/supabase";
 import { CustomerOrder, OrderItem } from "@/types/store";
 import { formatPrice } from "@/lib/utils";
+import { openPrintableInvoice } from "@/lib/store-config";
 import {
   Package,
   MapPin,
@@ -24,6 +25,7 @@ import {
   LogOut,
   Copy,
   MessageCircle,
+  Printer,
   Search,
   Sparkles,
   Truck,
@@ -35,6 +37,9 @@ interface TrackedGuestOrder {
   date: string;
   customer_first_name?: string;
   status: string;
+  payment_status?: string;
+  invoice_number?: string | null;
+  paid_at?: string | null;
   tracking?: string;
   shipping_method: string;
   shipping_cost: number;
@@ -72,6 +77,7 @@ interface DbCustomerOrderRow {
   shipping_method: string;
   shipping_cost: number | string;
   relay_point?: string | null;
+  relay_point_id?: string | null;
   address?: string | null;
   building?: string | null;
   digicode?: string | null;
@@ -80,10 +86,35 @@ interface DbCustomerOrderRow {
   subtotal: number | string;
   total: number | string;
   status: string;
+  payment_status?: string | null;
+  invoice_number?: string | null;
+  paid_at?: string | null;
   tracking?: string | null;
   items?: OrderItem[] | null;
   created_at?: string | null;
   user_id?: string | null;
+}
+
+function formatPaymentStatusBadge(paymentStatus?: string | null) {
+  switch ((paymentStatus || "pending").toLowerCase()) {
+    case "paid":
+      return {
+        label: "Payée",
+        className: "bg-emerald-50 text-emerald-800 border-emerald-200",
+      };
+    case "expired":
+    case "failed":
+    case "refunded":
+      return {
+        label: "Expirée / Échouée",
+        className: "bg-rose-50 text-rose-800 border-rose-200",
+      };
+    default:
+      return {
+        label: "En attente",
+        className: "bg-amber-50 text-amber-800 border-amber-200",
+      };
+  }
 }
 
 export default function ComptePage() {
@@ -254,6 +285,7 @@ export default function ComptePage() {
                   shipping_method: o.shipping_method,
                   shipping_cost: Number(o.shipping_cost || 0),
                   relay_point: o.relay_point ?? null,
+                  relay_point_id: o.relay_point_id ?? null,
                   address: o.address ?? null,
                   building: o.building ?? null,
                   digicode: o.digicode ?? null,
@@ -262,6 +294,9 @@ export default function ComptePage() {
                   subtotal: Number(o.subtotal || 0),
                   total: Number(o.total || 0),
                   status: o.status || "pending",
+                  payment_status: o.payment_status ?? "pending",
+                  invoice_number: o.invoice_number ?? null,
+                  paid_at: o.paid_at ?? null,
                   tracking: o.tracking || "",
                   items: Array.isArray(o.items) ? o.items : [],
                   created_at: o.created_at ?? undefined,
@@ -1073,22 +1108,40 @@ export default function ComptePage() {
                   {/* Résultat du suivi invité */}
                   {guestOrderResult && (
                     <div className="mt-4 p-4 rounded-xl bg-[#F5F2EB] border border-[#E7E2DA] space-y-3">
-                      <div className="flex items-center justify-between">
+                      <div className="flex flex-wrap items-center justify-between gap-2">
                         <span className="font-semibold text-xs text-[#1C1917]">
                           #{guestOrderResult.order_number}
                         </span>
-                        <span
-                          className={`text-[10px] font-semibold uppercase px-2 py-0.5 rounded-full border ${
-                            formatStatus(guestOrderResult.status).className
-                          }`}
-                        >
-                          {formatStatus(guestOrderResult.status).label}
-                        </span>
+                        <div className="flex flex-wrap items-center gap-1.5">
+                          <span
+                            className={`text-[10px] font-semibold uppercase px-2 py-0.5 rounded-full border ${
+                              formatPaymentStatusBadge(guestOrderResult.payment_status).className
+                            }`}
+                          >
+                            {formatPaymentStatusBadge(guestOrderResult.payment_status).label}
+                          </span>
+                          <span
+                            className={`text-[10px] font-semibold uppercase px-2 py-0.5 rounded-full border ${
+                              formatStatus(guestOrderResult.status).className
+                            }`}
+                          >
+                            {formatStatus(guestOrderResult.status).label}
+                          </span>
+                        </div>
                       </div>
 
                       <p className="text-xs text-[#57534E]">
                         Date : <strong className="text-[#1C1917]">{guestOrderResult.date}</strong> • Total :{" "}
                         <strong className="text-[#A16207]">{formatPrice(guestOrderResult.total)}</strong>
+                        {guestOrderResult.invoice_number ? (
+                          <>
+                            {" "}
+                            • Facture :{" "}
+                            <strong className="font-mono text-[#1C1917]">
+                              {guestOrderResult.invoice_number}
+                            </strong>
+                          </>
+                        ) : null}
                       </p>
 
                       {guestOrderResult.tracking ? (
@@ -1250,6 +1303,7 @@ export default function ComptePage() {
                   <div className="space-y-5">
                     {customerOrders.map((order) => {
                       const statusInfo = formatStatus(order.status);
+                      const paymentBadge = formatPaymentStatusBadge(order.payment_status);
                       const whatsappText = `Bonjour Club Parfum, je souhaite des précisions concernant ma commande #${order.order_number} (${order.status}).`;
                       const whatsappUrl = `https://wa.me/33769914251?text=${encodeURIComponent(whatsappText)}`;
 
@@ -1261,7 +1315,7 @@ export default function ComptePage() {
                           {/* En-tête commande */}
                           <div className="p-5 sm:p-6 bg-[#FAFAF8] border-b border-[#E7E2DA] flex flex-wrap items-center justify-between gap-4">
                             <div className="space-y-1">
-                              <div className="flex items-center gap-3">
+                              <div className="flex flex-wrap items-center gap-2 sm:gap-3">
                                 <span className="font-serif text-xl sm:text-2xl text-[#1C1917] font-semibold">
                                   #{order.order_number}
                                 </span>
@@ -1270,6 +1324,16 @@ export default function ComptePage() {
                                 >
                                   {statusInfo.label}
                                 </span>
+                                <span
+                                  className={`text-xs font-semibold uppercase px-3 py-1 rounded-full border ${paymentBadge.className}`}
+                                >
+                                  {paymentBadge.label}
+                                </span>
+                                {order.invoice_number && (
+                                  <span className="text-xs font-mono px-2.5 py-0.5 rounded-full bg-[#F2EFE9] text-[#1C1917] border border-[#E7E2DA]">
+                                    Facture : {order.invoice_number}
+                                  </span>
+                                )}
                               </div>
                               <p className="text-xs text-[#78716C]">
                                 Date de commande : <strong className="text-[#1C1917]">{order.date}</strong> • Mode :{" "}
@@ -1277,11 +1341,43 @@ export default function ComptePage() {
                               </p>
                             </div>
 
-                            <div className="text-right">
-                              <span className="text-xs uppercase tracking-wider text-[#78716C] block">Total réglé</span>
-                              <span className="font-serif text-2xl text-[#A16207] font-bold">
-                                {formatPrice(order.total)}
-                              </span>
+                            <div className="flex items-center gap-4">
+                              {order.payment_status === "paid" && (
+                                <button
+                                  type="button"
+                                  onClick={() =>
+                                    openPrintableInvoice({
+                                      invoiceNumber: order.invoice_number || order.order_number,
+                                      orderNumber: order.order_number,
+                                      date: order.date,
+                                      paidAt: order.paid_at,
+                                      customerName:
+                                        order.customer_name ||
+                                        `${user.firstName} ${user.lastName}`.trim(),
+                                      customerEmail: order.customer_email || user.email,
+                                      shippingMethod: order.shipping_method,
+                                      relayPoint: order.relay_point,
+                                      address: order.address,
+                                      postalCode: order.postal_code,
+                                      city: order.city,
+                                      items: order.items,
+                                      subtotal: order.subtotal,
+                                      shippingCost: order.shipping_cost,
+                                      total: order.total,
+                                    })
+                                  }
+                                  className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-white border border-[#E7E2DA] hover:bg-[#F2EFE9] text-xs font-semibold text-[#1C1917] transition cursor-pointer shadow-2xs"
+                                >
+                                  <Printer className="w-3.5 h-3.5 text-[#A16207]" />
+                                  <span>Imprimer / Télécharger Facture</span>
+                                </button>
+                              )}
+                              <div className="text-right">
+                                <span className="text-xs uppercase tracking-wider text-[#78716C] block">Total réglé</span>
+                                <span className="font-serif text-2xl text-[#A16207] font-bold">
+                                  {formatPrice(order.total)}
+                                </span>
+                              </div>
                             </div>
                           </div>
 

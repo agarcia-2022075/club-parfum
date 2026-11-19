@@ -7,6 +7,7 @@
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 
 -- 2. SUPPRESSION PRÉVENTIVE (Optionnelle, pour réinitialisation propre)
+DROP TABLE IF EXISTS withdrawal_requests CASCADE;
 DROP TABLE IF EXISTS customer_profiles CASCADE;
 DROP TABLE IF EXISTS order_items CASCADE;
 DROP TABLE IF EXISTS orders CASCADE;
@@ -55,7 +56,7 @@ CREATE TABLE products (
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- 5. TABLE VARIANTES DE PRODUITS (Formats & Contenances)
+-- 5. TABLE VARIANTES DE PRODUITS (Formats, Contenances & Stock atomique)
 CREATE TABLE product_variants (
   id TEXT PRIMARY KEY,
   product_id TEXT NOT NULL REFERENCES products(id) ON DELETE CASCADE,
@@ -63,6 +64,7 @@ CREATE TABLE product_variants (
   size_label TEXT NOT NULL,
   price NUMERIC(10,2) NOT NULL,
   in_stock BOOLEAN NOT NULL DEFAULT true,
+  stock_quantity INTEGER NOT NULL DEFAULT 25 CHECK (stock_quantity >= 0),
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
@@ -80,7 +82,7 @@ CREATE TABLE shipping_methods (
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- 7. TABLE COMMANDES (Format conforme logistique & droit français)
+-- 7. TABLE COMMANDES (Format conforme logistique, Stripe & facturation française)
 CREATE TABLE orders (
   id TEXT PRIMARY KEY,
   user_id UUID REFERENCES auth.users(id) ON DELETE SET NULL,
@@ -95,6 +97,7 @@ CREATE TABLE orders (
   shipping_method TEXT NOT NULL,
   shipping_cost NUMERIC(10,2) NOT NULL DEFAULT 0.00,
   relay_point TEXT,
+  relay_point_id TEXT,
   address TEXT,
   building TEXT,
   digicode TEXT,
@@ -103,6 +106,14 @@ CREATE TABLE orders (
   subtotal NUMERIC(10,2) NOT NULL,
   total NUMERIC(10,2) NOT NULL,
   status TEXT NOT NULL DEFAULT 'pending', -- pending | shipped | delivered | cancelled
+  payment_gateway TEXT NOT NULL DEFAULT 'stripe',
+  payment_status TEXT NOT NULL DEFAULT 'pending', -- pending | paid | failed | expired | refunded
+  stripe_session_id TEXT UNIQUE,
+  stripe_payment_intent_id TEXT,
+  invoice_number TEXT UNIQUE,
+  paid_at TIMESTAMPTZ,
+  cgv_accepted BOOLEAN NOT NULL DEFAULT true,
+  cgv_accepted_at TIMESTAMPTZ DEFAULT NOW(),
   tracking TEXT DEFAULT '',
   items JSONB NOT NULL DEFAULT '[]'::jsonb,
   created_at TIMESTAMPTZ DEFAULT NOW()
@@ -125,6 +136,79 @@ CREATE TABLE IF NOT EXISTS customer_profiles (
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
+-- 7.2 TABLE DEMANDES DE RÉTRACTATION (Code de la consommation L.221-18)
+CREATE TABLE IF NOT EXISTS withdrawal_requests (
+  id TEXT PRIMARY KEY,
+  reference TEXT NOT NULL UNIQUE,
+  order_number TEXT NOT NULL,
+  customer_name TEXT NOT NULL,
+  customer_email TEXT NOT NULL,
+  reason TEXT DEFAULT '',
+  status TEXT NOT NULL DEFAULT 'received',
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- 7.3 SÉQUENCES COMPTABLES SANS SAUTS & FONCTIONS RPC ATOMIQUES (SERVICE_ROLE UNIQUEMENT)
+CREATE SEQUENCE IF NOT EXISTS public.order_number_seq START WITH 1001;
+CREATE SEQUENCE IF NOT EXISTS public.invoice_number_seq START WITH 1;
+
+CREATE OR REPLACE FUNCTION public.next_order_number()
+RETURNS TEXT
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  seq_val BIGINT;
+BEGIN
+  seq_val := nextval('public.order_number_seq');
+  RETURN 'CP-' || to_char(NOW(), 'YYYY') || '-' || lpad(seq_val::text, 5, '0');
+END;
+$$;
+
+CREATE OR REPLACE FUNCTION public.next_invoice_number()
+RETURNS TEXT
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  seq_val BIGINT;
+BEGIN
+  seq_val := nextval('public.invoice_number_seq');
+  RETURN 'FA-' || to_char(NOW(), 'YYYY') || '-' || lpad(seq_val::text, 5, '0');
+END;
+$$;
+
+CREATE OR REPLACE FUNCTION public.decrement_variant_stock(p_variant_id TEXT, p_qty INTEGER)
+RETURNS INTEGER
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  new_qty INTEGER;
+BEGIN
+  UPDATE public.product_variants
+  SET
+    stock_quantity = GREATEST(0, stock_quantity - GREATEST(0, p_qty)),
+    in_stock = (GREATEST(0, stock_quantity - GREATEST(0, p_qty)) > 0)
+  WHERE id = p_variant_id
+  RETURNING stock_quantity INTO new_qty;
+
+  RETURN COALESCE(new_qty, 0);
+END;
+$$;
+
+REVOKE ALL ON FUNCTION public.next_order_number() FROM PUBLIC, anon, authenticated;
+GRANT EXECUTE ON FUNCTION public.next_order_number() TO service_role;
+
+REVOKE ALL ON FUNCTION public.next_invoice_number() FROM PUBLIC, anon, authenticated;
+GRANT EXECUTE ON FUNCTION public.next_invoice_number() TO service_role;
+
+REVOKE ALL ON FUNCTION public.decrement_variant_stock(TEXT, INTEGER) FROM PUBLIC, anon, authenticated;
+GRANT EXECUTE ON FUNCTION public.decrement_variant_stock(TEXT, INTEGER) TO service_role;
+
 -- 8. POLITIQUES DE SÉCURITÉ (ROW LEVEL SECURITY - RLS)
 ALTER TABLE categories ENABLE ROW LEVEL SECURITY;
 ALTER TABLE olfactory_families ENABLE ROW LEVEL SECURITY;
@@ -133,6 +217,7 @@ ALTER TABLE product_variants ENABLE ROW LEVEL SECURITY;
 ALTER TABLE shipping_methods ENABLE ROW LEVEL SECURITY;
 ALTER TABLE orders ENABLE ROW LEVEL SECURITY;
 ALTER TABLE customer_profiles ENABLE ROW LEVEL SECURITY;
+ALTER TABLE withdrawal_requests ENABLE ROW LEVEL SECURITY;
 
 -- 8.1 Lecture publique du catalogue (visiteurs et clients de la boutique)
 CREATE POLICY "Lecture publique des catégories" ON categories FOR SELECT USING (true);
@@ -154,8 +239,8 @@ DROP POLICY IF EXISTS "Mise à jour profil personnel" ON customer_profiles;
 CREATE POLICY "Mise à jour profil personnel" ON customer_profiles
   FOR UPDATE USING (auth.uid() = id) WITH CHECK (auth.uid() = id);
 
--- 8.3 Checkout Public: Le visiteur peut UNIQUEMENT insérer des commandes valides (INSERT)
--- SELECT bloqué pour les utilisateurs anonymes (prévention de fuite de données RGPD)
+-- 8.3 Checkout Sécurisé : Aucune insertion anonyme autorisée sur orders (prévention fraude tarifaire & RGPD)
+-- Toutes les créations de commandes passent exclusivement par POST /api/checkout/session via service_role.
 DROP POLICY IF EXISTS "Gestion admin des commandes" ON orders;
 DROP POLICY IF EXISTS "Gestion admin des produits" ON products;
 DROP POLICY IF EXISTS "Gestion admin des catégories" ON categories;
@@ -163,14 +248,7 @@ DROP POLICY IF EXISTS "Gestion admin des variantes" ON product_variants;
 DROP POLICY IF EXISTS "Gestion admin des familles olfactives" ON olfactory_families;
 DROP POLICY IF EXISTS "Création de commande publique" ON orders;
 DROP POLICY IF EXISTS "Création de commande publique validée" ON orders;
-
-CREATE POLICY "Insertion commande client anonyme" ON orders
-  FOR INSERT WITH CHECK (
-    length(order_number) > 0 AND
-    length(customer_name) > 0 AND
-    length(customer_email) > 0 AND
-    total >= 0
-  );
+DROP POLICY IF EXISTS "Insertion commande client anonyme" ON orders;
 
 -- 8.4 Consultation de commande propre: Si authentifié, le client ne voit que ses propres commandes
 CREATE POLICY "Lecture commandes propres client" ON orders

@@ -4,6 +4,7 @@ export interface ProductVariant {
   size_label: string; // e.g. "10 ml (Vapo de sac)", "50 ml", "100 ml", "180 g (45h)"
   price: number;
   in_stock: boolean;
+  stock_quantity?: number;
 }
 
 export type OlfactoryFamily =
@@ -90,6 +91,9 @@ export interface CustomerProfile {
 }
 
 export interface OrderItem {
+  product_id?: string;
+  variant_id?: string;
+  sku?: string;
   name: string;
   variant: string;
   qty: number;
@@ -109,6 +113,7 @@ export interface CustomerOrder {
   shipping_method: string;
   shipping_cost: number;
   relay_point?: string | null;
+  relay_point_id?: string | null;
   address?: string | null;
   building?: string | null;
   digicode?: string | null;
@@ -117,6 +122,10 @@ export interface CustomerOrder {
   subtotal: number;
   total: number;
   status: "pending" | "shipped" | "delivered" | "cancelled" | string;
+  payment_status?: string;
+  payment_gateway?: string;
+  invoice_number?: string | null;
+  paid_at?: string | null;
   tracking?: string;
   items: OrderItem[];
   created_at?: string;

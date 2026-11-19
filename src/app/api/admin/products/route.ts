@@ -4,6 +4,51 @@ import { verifyAdminRequest } from "@/lib/admin-auth";
 import { CATEGORIES, MOCK_PRODUCTS } from "@/data/mock-data";
 import { Product, ProductVariant } from "@/types/store";
 
+const OFFICIAL_OLFACTORY_FAMILIES = [
+  {
+    id: "fam-orientale",
+    name: "Orientale",
+    mood: "Chaleureux & Envoûtant",
+    description: "Ambre doré, oud précieux, résines et épices douces.",
+  },
+  {
+    id: "fam-boisee",
+    name: "Boisée",
+    mood: "Noble & Apaisant",
+    description: "Cèdre de l'Atlas, santal, vétiver et sauge sclarée.",
+  },
+  {
+    id: "fam-fleurie",
+    name: "Fleurie",
+    mood: "Solaire & Lumineux",
+    description: "Fleur d'oranger de Grasse, rose centifolia, jasmin et néroli.",
+  },
+  {
+    id: "fam-gourmande",
+    name: "Gourmande",
+    mood: "Suave & Réconfortant",
+    description: "Vanille bourbon de Madagascar, fève tonka et notes miellées.",
+  },
+  {
+    id: "fam-poudree",
+    name: "Poudrée",
+    mood: "Doux & Cotonneux",
+    description: "Fleur de coton, iris pâle, musc blanc et héliotrope.",
+  },
+  {
+    id: "fam-hesperidee",
+    name: "Hespéridée",
+    mood: "Frais & Vivifiant",
+    description: "Bergamote de Calabre, mandarine, cédrat et petit-grain.",
+  },
+  {
+    id: "fam-aromatique",
+    name: "Aromatique",
+    mood: "Herbacé & Purifiant",
+    description: "Lavande fine de Provence, romarin, thym et eucalyptus.",
+  },
+];
+
 function computeBasePrice(rawBasePrice: unknown, variants: ProductVariant[]): number {
   const positivePrices = variants
     .map((v) => Number(v.price))
@@ -15,6 +60,21 @@ function computeBasePrice(rawBasePrice: unknown, variants: ProductVariant[]): nu
   return Number.isFinite(fallback) && fallback >= 0 ? fallback : 0;
 }
 
+function resolveVariantStock(
+  rawStock: unknown,
+  rawInStock: unknown
+): { stock_quantity: number; in_stock: boolean } {
+  const parsed = Number(rawStock);
+  const hasNumericStock =
+    rawStock !== undefined && rawStock !== null && rawStock !== "" && Number.isFinite(parsed);
+  if (hasNumericStock) {
+    const qty = Math.max(0, Math.floor(parsed));
+    return { stock_quantity: qty, in_stock: qty > 0 };
+  }
+  const inStock = typeof rawInStock === "boolean" ? rawInStock : true;
+  return { stock_quantity: inStock ? 25 : 0, in_stock: inStock };
+}
+
 function normalizeVariants(
   rawVariants: unknown,
   categoryName: string,
@@ -24,6 +84,7 @@ function normalizeVariants(
     return rawVariants.map((item, idx) => {
       const v = (item && typeof item === "object" ? item : {}) as Partial<ProductVariant>;
       const price = Number(v.price);
+      const stock = resolveVariantStock(v.stock_quantity, v.in_stock);
       return {
         id: typeof v.id === "string" && v.id.trim() ? v.id.trim() : `var-${Date.now()}-${idx + 1}`,
         sku: typeof v.sku === "string" && v.sku.trim() ? v.sku.trim() : `CP-${Date.now().toString().slice(-4)}-${idx + 1}`,
@@ -32,7 +93,8 @@ function normalizeVariants(
             ? v.size_label.trim()
             : "Format Standard",
         price: Number.isFinite(price) && price >= 0 ? price : 0,
-        in_stock: typeof v.in_stock === "boolean" ? v.in_stock : true,
+        in_stock: stock.in_stock,
+        stock_quantity: stock.stock_quantity,
       };
     });
   }
@@ -46,8 +108,24 @@ function normalizeVariants(
         : "Flacon Vaporisateur 50 ml",
       price: fallbackBasePrice,
       in_stock: true,
+      stock_quantity: 25,
     },
   ];
+}
+
+function buildVariantDbRows(productId: string, variants: ProductVariant[]) {
+  return variants.map((v) => {
+    const stock = resolveVariantStock(v.stock_quantity, v.in_stock);
+    return {
+      id: v.id,
+      product_id: productId,
+      sku: v.sku,
+      size_label: v.size_label,
+      price: Number(v.price),
+      in_stock: stock.in_stock,
+      stock_quantity: stock.stock_quantity,
+    };
+  });
 }
 
 function buildFinalizedProduct(raw: Partial<Product>): Product | null {
@@ -149,6 +227,26 @@ export async function POST(request: NextRequest) {
         );
       }
 
+      const officialFamilyIds = OFFICIAL_OLFACTORY_FAMILIES.map((f) => f.id);
+      const { data: existingFamilies } = await supabaseAdmin
+        .from("olfactory_families")
+        .select("id");
+      const extraFamilyIds = (existingFamilies || [])
+        .map((row: { id: string }) => row.id)
+        .filter((id) => !officialFamilyIds.includes(id));
+
+      if (extraFamilyIds.length > 0) {
+        await supabaseAdmin.from("olfactory_families").delete().in("id", extraFamilyIds);
+      }
+
+      const { error: famUpsertError } = await supabaseAdmin
+        .from("olfactory_families")
+        .upsert(OFFICIAL_OLFACTORY_FAMILIES, { onConflict: "id" });
+
+      if (famUpsertError) {
+        console.error("Erreur restauration familles olfactives:", famUpsertError);
+      }
+
       const { data: existingProducts, error: listError } = await supabaseAdmin
         .from("products")
         .select("id");
@@ -233,6 +331,7 @@ export async function POST(request: NextRequest) {
           size_label: v.size_label,
           price: Number(v.price),
           in_stock: true,
+          stock_quantity: 25,
         }))
       );
 
@@ -298,14 +397,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const variantsData = (product.variants || []).map((v) => ({
-      id: v.id,
-      product_id: product.id,
-      sku: v.sku,
-      size_label: v.size_label,
-      price: Number(v.price),
-      in_stock: v.in_stock ?? true,
-    }));
+    const variantsData = buildVariantDbRows(product.id, product.variants || []);
 
     if (variantsData.length > 0) {
       const { error: varError } = await supabaseAdmin.from("product_variants").insert(variantsData);
@@ -389,19 +481,50 @@ export async function PATCH(request: NextRequest) {
     if (body.action === "toggleVariantStock") {
       const variantId = typeof body.variantId === "string" ? body.variantId.trim() : "";
       const inStock = body.in_stock;
+      const rawStockQty = body.stock_quantity;
 
-      if (!variantId || typeof inStock !== "boolean") {
+      if (!variantId || (typeof inStock !== "boolean" && typeof rawStockQty !== "number")) {
         return NextResponse.json(
-          { error: "Paramètres variantId et in_stock requis." },
+          { error: "Paramètres variantId et in_stock ou stock_quantity requis." },
           { status: 400 }
         );
       }
 
+      const { data: existingVariant, error: readVarError } = await supabaseAdmin
+        .from("product_variants")
+        .select("id, in_stock, stock_quantity")
+        .eq("id", variantId)
+        .maybeSingle<{ id: string; in_stock: boolean; stock_quantity: number | null }>();
+
+      if (readVarError) {
+        console.error("Erreur lecture variante toggleVariantStock:", readVarError);
+        return NextResponse.json(
+          { error: "Impossible de lire le stock de ce format." },
+          { status: 500 }
+        );
+      }
+
+      if (!existingVariant) {
+        return NextResponse.json({ error: "Format introuvable." }, { status: 404 });
+      }
+
+      let nextStockQty: number;
+      let nextInStock: boolean;
+      if (typeof rawStockQty === "number" && Number.isFinite(rawStockQty)) {
+        nextStockQty = Math.max(0, Math.floor(rawStockQty));
+        nextInStock = nextStockQty > 0;
+      } else {
+        const currentQty =
+          typeof existingVariant.stock_quantity === "number" ? existingVariant.stock_quantity : 0;
+        nextInStock = Boolean(inStock);
+        nextStockQty = nextInStock ? (currentQty > 0 ? currentQty : 25) : 0;
+      }
+
       const { data, error } = await supabaseAdmin
         .from("product_variants")
-        .update({ in_stock: inStock })
+        .update({ in_stock: nextInStock, stock_quantity: nextStockQty })
         .eq("id", variantId)
-        .select("id")
+        .select("id, in_stock, stock_quantity")
         .maybeSingle();
 
       if (error) {
@@ -416,7 +539,15 @@ export async function PATCH(request: NextRequest) {
         return NextResponse.json({ error: "Format introuvable." }, { status: 404 });
       }
 
-      return NextResponse.json({ success: true, variantId, in_stock: inStock }, { status: 200 });
+      return NextResponse.json(
+        {
+          success: true,
+          variantId,
+          in_stock: nextInStock,
+          stock_quantity: nextStockQty,
+        },
+        { status: 200 }
+      );
     }
 
     // --- MISE À JOUR COMPLÈTE DU PRODUIT & RÉCONCILIATION DES VARIANTES ---
@@ -486,14 +617,7 @@ export async function PATCH(request: NextRequest) {
       );
     }
 
-    const variantsData = (product.variants || []).map((v) => ({
-      id: v.id,
-      product_id: product.id,
-      sku: v.sku,
-      size_label: v.size_label,
-      price: Number(v.price),
-      in_stock: v.in_stock ?? true,
-    }));
+    const variantsData = buildVariantDbRows(product.id, product.variants || []);
 
     if (variantsData.length > 0) {
       const { error: insertVarError } = await supabaseAdmin

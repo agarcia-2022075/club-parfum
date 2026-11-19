@@ -39,6 +39,7 @@ import { useCatalog } from "@/context/CatalogContext";
 import { formatPrice } from "@/lib/utils";
 import { OlfactoryFamily, Product, ProductVariant } from "@/types/store";
 import { getOlfactoryTheme } from "@/lib/olfactory-theme";
+import { openPrintableInvoice } from "@/lib/store-config";
 
 const slugify = (str: string) =>
   str
@@ -71,9 +72,13 @@ interface AdminOrder {
   digicode?: string | null;
   postal_code?: string | null;
   city?: string | null;
+  subtotal: number;
   shipping_cost: number;
   total: number;
   status: "pending" | "shipped" | "delivered" | "cancelled" | string;
+  payment_status: string;
+  invoice_number?: string | null;
+  paid_at?: string | null;
   tracking: string;
 }
 
@@ -102,10 +107,36 @@ interface DbOrderRow {
   digicode?: string | null;
   postal_code?: string | null;
   city?: string | null;
+  subtotal?: number | string | null;
   shipping_cost?: number | string | null;
   total?: number | string | null;
   status?: string | null;
+  payment_status?: string | null;
+  invoice_number?: string | null;
+  paid_at?: string | null;
   tracking?: string | null;
+}
+
+function getPaymentStatusBadge(paymentStatus?: string | null) {
+  switch ((paymentStatus || "pending").toLowerCase()) {
+    case "paid":
+      return {
+        label: "Payée",
+        className: "bg-emerald-50 text-emerald-800 border border-emerald-200",
+      };
+    case "expired":
+    case "failed":
+    case "refunded":
+      return {
+        label: "Expirée / Échouée",
+        className: "bg-rose-50 text-rose-800 border border-rose-200",
+      };
+    default:
+      return {
+        label: "En attente",
+        className: "bg-amber-50 text-amber-800 border border-amber-200",
+      };
+  }
 }
 
 function mapDbOrderToAdminOrder(row: DbOrderRow): AdminOrder {
@@ -113,6 +144,12 @@ function mapDbOrderToAdminOrder(row: DbOrderRow): AdminOrder {
   const formattedDate = row.created_at
     ? new Date(row.created_at).toLocaleDateString("fr-FR")
     : "Date inconnue";
+  const shippingCost = Number(row.shipping_cost || 0);
+  const total = Number(row.total || 0);
+  const subtotal =
+    row.subtotal !== undefined && row.subtotal !== null
+      ? Number(row.subtotal)
+      : Math.max(0, total - shippingCost);
 
   return {
     id: row.order_number || row.id,
@@ -136,9 +173,13 @@ function mapDbOrderToAdminOrder(row: DbOrderRow): AdminOrder {
     digicode: row.digicode ?? null,
     postal_code: row.postal_code ?? null,
     city: row.city ?? null,
-    shipping_cost: Number(row.shipping_cost || 0),
-    total: Number(row.total || 0),
+    subtotal,
+    shipping_cost: shippingCost,
+    total,
     status: row.status || "pending",
+    payment_status: row.payment_status || "pending",
+    invoice_number: row.invoice_number ?? null,
+    paid_at: row.paid_at ?? null,
     tracking: row.tracking || "",
   };
 }
@@ -447,7 +488,10 @@ export default function AdminDashboard() {
         }),
       });
 
-      const data = (await res.json().catch(() => ({}))) as { error?: string };
+      const data = (await res.json().catch(() => ({}))) as {
+        error?: string;
+        emailSent?: boolean;
+      };
       if (!res.ok) {
         if (res.status === 401) {
           setIsAuthenticated(false);
@@ -472,11 +516,17 @@ export default function AdminDashboard() {
       setSelectedOrder((prev) =>
         prev ? { ...prev, status: newStatus, tracking: newTracking } : null
       );
+      const feedbackMsg =
+        newStatus === "shipped" && data.emailSent
+          ? "Commande mise à jour et e-mail d'expédition envoyé au client."
+          : newStatus === "shipped"
+            ? "Commande mise à jour (e-mail d'expédition non envoyé ou service e-mail non configuré)."
+            : "Commande mise à jour avec succès !";
       setOrderActionFeedback({
         type: "success",
-        message: "Commande mise à jour avec succès !",
+        message: feedbackMsg,
       });
-      setTimeout(() => setOrderActionFeedback(null), 2500);
+      setTimeout(() => setOrderActionFeedback(null), 3500);
     } catch {
       setOrderActionFeedback({
         type: "error",
@@ -532,6 +582,26 @@ export default function AdminDashboard() {
     } finally {
       setIsSavingOrder(false);
     }
+  };
+
+  const handlePrintOrderInvoice = (order: AdminOrder) => {
+    openPrintableInvoice({
+      invoiceNumber: order.invoice_number || order.id,
+      orderNumber: order.id,
+      date: order.date,
+      paidAt: order.paid_at,
+      customerName: order.customer,
+      customerEmail: order.email,
+      shippingMethod: order.shipping_method,
+      relayPoint: order.relay_point,
+      address: order.address,
+      postalCode: order.postal_code,
+      city: order.city,
+      items: order.items,
+      subtotal: order.subtotal,
+      shippingCost: order.shipping_cost,
+      total: order.total,
+    });
   };
 
   const handleWhatsAppNotify = (order: AdminOrder) => {
@@ -596,9 +666,9 @@ export default function AdminDashboard() {
     setPHeartNotes("Fleurs blanches de Grasse, Néroli");
     setPBaseNotes("Ambre chaud, Bois de Santal");
     setPVariants([
-      { id: `var-${Date.now()}-1`, sku: `CP-10`, size_label: "Format Découverte 10 ml", price: 9.9, in_stock: true },
-      { id: `var-${Date.now()}-2`, sku: `CP-50`, size_label: "Flacon Vaporisateur 50 ml", price: 28.0, in_stock: true },
-      { id: `var-${Date.now()}-3`, sku: `CP-100`, size_label: "Flacon Prestige 100 ml", price: 38.0, in_stock: true },
+      { id: `var-${Date.now()}-1`, sku: `CP-10`, size_label: "Format Découverte 10 ml", price: 9.9, in_stock: true, stock_quantity: 25 },
+      { id: `var-${Date.now()}-2`, sku: `CP-50`, size_label: "Flacon Vaporisateur 50 ml", price: 28.0, in_stock: true, stock_quantity: 25 },
+      { id: `var-${Date.now()}-3`, sku: `CP-100`, size_label: "Flacon Prestige 100 ml", price: 38.0, in_stock: true, stock_quantity: 25 },
     ]);
     setPImageUrl("");
     setPPreviewImage(null);
@@ -624,7 +694,15 @@ export default function AdminDashboard() {
     setPBaseNotes((prod.olfactory_pyramid?.base_notes || []).join(", "));
     setPVariants(
       prod.variants && prod.variants.length > 0
-        ? [...prod.variants]
+        ? prod.variants.map((v) => ({
+            ...v,
+            stock_quantity:
+              typeof v.stock_quantity === "number" && Number.isFinite(v.stock_quantity)
+                ? v.stock_quantity
+                : v.in_stock
+                  ? 25
+                  : 0,
+          }))
         : [
             {
               id: `var-${Date.now()}`,
@@ -632,6 +710,7 @@ export default function AdminDashboard() {
               size_label: "Format Unique 50 ml",
               price: prod.base_price,
               in_stock: true,
+              stock_quantity: 25,
             },
           ]
     );
@@ -692,16 +771,16 @@ export default function AdminDashboard() {
   // Plantilles de variantes
   const applyParfumPack = () => {
     setPVariants([
-      { id: `var-${Date.now()}-1`, sku: `EDP-10`, size_label: "Format Découverte 10 ml", price: 9.9, in_stock: true },
-      { id: `var-${Date.now()}-2`, sku: `EDP-50`, size_label: "Flacon Vaporisateur 50 ml", price: 28.0, in_stock: true },
-      { id: `var-${Date.now()}-3`, sku: `EDP-100`, size_label: "Flacon Prestige 100 ml", price: 38.0, in_stock: true },
+      { id: `var-${Date.now()}-1`, sku: `EDP-10`, size_label: "Format Découverte 10 ml", price: 9.9, in_stock: true, stock_quantity: 25 },
+      { id: `var-${Date.now()}-2`, sku: `EDP-50`, size_label: "Flacon Vaporisateur 50 ml", price: 28.0, in_stock: true, stock_quantity: 25 },
+      { id: `var-${Date.now()}-3`, sku: `EDP-100`, size_label: "Flacon Prestige 100 ml", price: 38.0, in_stock: true, stock_quantity: 25 },
     ]);
   };
 
   const applyBougiePack = () => {
     setPVariants([
-      { id: `var-${Date.now()}-1`, sku: `BOU-180`, size_label: "Classique 180 g (env. 45h)", price: 24.9, in_stock: true },
-      { id: `var-${Date.now()}-2`, sku: `BOU-300`, size_label: "Grand Modèle 300 g (env. 75h)", price: 34.9, in_stock: true },
+      { id: `var-${Date.now()}-1`, sku: `BOU-180`, size_label: "Classique 180 g (env. 45h)", price: 24.9, in_stock: true, stock_quantity: 25 },
+      { id: `var-${Date.now()}-2`, sku: `BOU-300`, size_label: "Grand Modèle 300 g (env. 75h)", price: 34.9, in_stock: true, stock_quantity: 25 },
     ]);
   };
 
@@ -714,6 +793,7 @@ export default function AdminDashboard() {
         size_label: "Nouveau format",
         price: 24.9,
         in_stock: true,
+        stock_quantity: 25,
       },
     ]);
   };
@@ -1392,6 +1472,7 @@ export default function AdminDashboard() {
                   const isPending = order.status === "pending";
                   const isShipped = order.status === "shipped";
                   const isDelivered = order.status === "delivered";
+                  const paymentBadge = getPaymentStatusBadge(order.payment_status);
 
                   return (
                     <div
@@ -1399,7 +1480,7 @@ export default function AdminDashboard() {
                       className="bg-white p-5 sm:p-6 rounded-2xl border border-[#E7E2DA] shadow-xs hover:border-[#A16207]/40 transition space-y-4"
                     >
                       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-[#F2EFE9]">
-                        <div className="flex items-center gap-3">
+                        <div className="flex flex-wrap items-center gap-2 sm:gap-3">
                           <span className="font-serif text-lg font-bold text-[#1C1917]">
                             #{order.id}
                           </span>
@@ -1423,9 +1504,31 @@ export default function AdminDashboard() {
                               ? "Livrée"
                               : "Annulée"}
                           </span>
+                          <span
+                            className={`px-2.5 py-0.5 rounded-full text-xs font-semibold uppercase tracking-wider ${paymentBadge.className}`}
+                          >
+                            {paymentBadge.label}
+                          </span>
+                          {order.invoice_number && (
+                            <span className="px-2.5 py-0.5 rounded-full text-xs font-mono bg-[#F2EFE9] text-[#1C1917] border border-[#E7E2DA]">
+                              Facture : {order.invoice_number}
+                            </span>
+                          )}
                         </div>
 
-                        <div className="flex items-center gap-2">
+                        <div className="flex flex-wrap items-center gap-2">
+                          {order.payment_status === "paid" && (
+                            <button
+                              type="button"
+                              onClick={() => handlePrintOrderInvoice(order)}
+                              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-medium bg-[#FAF8F5] text-[#1C1917] hover:bg-[#F2EFE9] border border-[#E7E2DA] transition cursor-pointer"
+                              title="Imprimer / Télécharger Facture"
+                            >
+                              <Printer className="w-3.5 h-3.5 text-[#A16207]" />
+                              <span>Imprimer / Télécharger Facture</span>
+                            </button>
+                          )}
+
                           <button
                             type="button"
                             onClick={() => handleWhatsAppNotify(order)}
@@ -1684,7 +1787,10 @@ export default function AdminDashboard() {
                                 }`}
                               />
                               <span>
-                                {v.size_label} — <strong>{formatPrice(v.price)}</strong>
+                                {v.size_label} — <strong>{formatPrice(v.price)}</strong>{" "}
+                                <span className="text-[11px] opacity-75">
+                                  ({v.stock_quantity ?? (v.in_stock ? 25 : 0)} u.)
+                                </span>
                               </span>
                             </button>
                           ))}
@@ -2021,12 +2127,22 @@ export default function AdminDashboard() {
                 <span className="text-xs text-[#A16207] font-bold uppercase tracking-wider block">
                   Centre Logistique Atelier
                 </span>
-                <div className="flex items-center gap-2">
+                <div className="flex flex-wrap items-center gap-2">
                   <h3 className="font-serif text-2xl font-bold text-[#1C1917]">
                     Commande #{selectedOrder.id}
                   </h3>
+                  <span
+                    className={`px-2.5 py-0.5 rounded-full text-xs font-semibold uppercase tracking-wider ${
+                      getPaymentStatusBadge(selectedOrder.payment_status).className
+                    }`}
+                  >
+                    {getPaymentStatusBadge(selectedOrder.payment_status).label}
+                  </span>
                 </div>
-                <p className="text-xs text-[#57534E]">{selectedOrder.date}</p>
+                <p className="text-xs text-[#57534E]">
+                  {selectedOrder.date}
+                  {selectedOrder.invoice_number ? ` • Facture : ${selectedOrder.invoice_number}` : ""}
+                </p>
               </div>
 
               <div className="flex items-center gap-2">
@@ -2183,6 +2299,17 @@ export default function AdminDashboard() {
                     <MessageCircle className="w-3.5 h-3.5" />
                     <span>Notifier le client sur WhatsApp</span>
                   </button>
+
+                  {selectedOrder.payment_status === "paid" && (
+                    <button
+                      type="button"
+                      onClick={() => handlePrintOrderInvoice(selectedOrder)}
+                      className="px-4 py-2 rounded-xl bg-[#FAF8F5] hover:bg-[#F2EFE9] border border-[#E7E2DA] text-[#1C1917] text-xs font-semibold uppercase tracking-wider transition cursor-pointer shadow-xs flex items-center gap-1.5"
+                    >
+                      <Printer className="w-3.5 h-3.5 text-[#A16207]" />
+                      <span>Imprimer / Télécharger Facture</span>
+                    </button>
+                  )}
                 </div>
               </div>
 
@@ -2442,7 +2569,7 @@ export default function AdminDashboard() {
                       key={v.id || idx}
                       className="p-3 rounded-xl border border-[#E7E2DA] bg-[#FAFAF8] grid grid-cols-1 sm:grid-cols-12 gap-2 items-center text-xs"
                     >
-                      <div className="sm:col-span-5">
+                      <div className="sm:col-span-4">
                         <label className="block text-[11px] font-medium text-[#57534E] mb-0.5">
                           Format / Mesure
                         </label>
@@ -2460,7 +2587,7 @@ export default function AdminDashboard() {
                         />
                       </div>
 
-                      <div className="sm:col-span-3">
+                      <div className="sm:col-span-2">
                         <label className="block text-[11px] font-medium text-[#57534E] mb-0.5">
                           Prix (€ TTC)
                         </label>
@@ -2473,6 +2600,29 @@ export default function AdminDashboard() {
                             const val = parseFloat(e.target.value) || 0;
                             setPVariants((prev) =>
                               prev.map((item, i) => (i === idx ? { ...item, price: val } : item))
+                            );
+                          }}
+                          className="w-full px-2.5 py-1.5 rounded-lg border border-[#E7E2DA] bg-white text-xs font-mono"
+                        />
+                      </div>
+
+                      <div className="sm:col-span-2">
+                        <label className="block text-[11px] font-medium text-[#57534E] mb-0.5">
+                          Stock (u.)
+                        </label>
+                        <input
+                          type="number"
+                          min={0}
+                          step={1}
+                          required
+                          value={v.stock_quantity ?? (v.in_stock ? 25 : 0)}
+                          onChange={(e) => {
+                            const parsed = parseInt(e.target.value, 10);
+                            const qty = Number.isFinite(parsed) && parsed >= 0 ? parsed : 0;
+                            setPVariants((prev) =>
+                              prev.map((item, i) =>
+                                i === idx ? { ...item, stock_quantity: qty, in_stock: qty > 0 } : item
+                              )
                             );
                           }}
                           className="w-full px-2.5 py-1.5 rounded-lg border border-[#E7E2DA] bg-white text-xs font-mono"
@@ -2504,7 +2654,13 @@ export default function AdminDashboard() {
                             onChange={(e) => {
                               const checked = e.target.checked;
                               setPVariants((prev) =>
-                                prev.map((item, i) => (i === idx ? { ...item, in_stock: checked } : item))
+                                prev.map((item, i) => {
+                                  if (i !== idx) return item;
+                                  const nextQty = checked
+                                    ? Math.max(1, item.stock_quantity ?? 25)
+                                    : 0;
+                                  return { ...item, in_stock: checked, stock_quantity: nextQty };
+                                })
                               );
                             }}
                             className="rounded text-[#A16207]"
